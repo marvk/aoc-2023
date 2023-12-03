@@ -13,7 +13,7 @@ impl<T: Debug + PartialEq> AocResult for T {}
 
 pub trait Part<R: AocResult> {
     fn expect_test(&self) -> R;
-    fn solve(&self, input: &Vec<String>) -> R;
+    fn solve(&self, input: &[String]) -> R;
 }
 
 pub struct Day<R1: AocResult, R2: AocResult> {

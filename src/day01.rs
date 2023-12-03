@@ -11,7 +11,7 @@ impl Part<i32> for Part1 {
         142
     }
 
-    fn solve(&self, input: &Vec<String>) -> i32 {
+    fn solve(&self, input: &[String]) -> i32 {
         solve(input, &(1..=9).map(|i| i.to_string()).collect::<Vec<_>>())
     }
 }
@@ -23,7 +23,7 @@ impl Part<i32> for Part2 {
         281
     }
 
-    fn solve(&self, input: &Vec<String>) -> i32 {
+    fn solve(&self, input: &[String]) -> i32 {
         solve(input, &DIGITS.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
     }
 }
