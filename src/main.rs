@@ -13,7 +13,7 @@ use std::time::Duration;
 use crate::day01::day01;
 use crate::day02::day02;
 use crate::day03::day03;
-// use crate::day04::day04;
+use crate::day04::day04;
 // use crate::day05::day05;
 // use crate::day06::day06;
 // use crate::day07::day07;
@@ -41,7 +41,7 @@ mod harness;
 mod day01;
 mod day02;
 mod day03;
-// mod day04;
+mod day04;
 // mod day05;
 // mod day06;
 // mod day07;
@@ -69,7 +69,7 @@ fn main() {
         day01().f(),
         day02().f(),
         day03().f(),
-        // day04().f(),
+        day04().f(),
         // day05().f(),
         // day06().f(),
         // day07().f(),
