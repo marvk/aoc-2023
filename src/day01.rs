@@ -71,7 +71,7 @@ fn solve(input: &[String], digits: &[String]) -> i32 {
                 .unwrap()
                 .0;
 
-            format!("{}{}", (min % 9) + 1, (max % 9) + 1).parse::<i32>().unwrap()
+            ((min % 9) + 1) * 10 + (max % 9) + 1
         })
-        .sum::<i32>()
+        .sum::<usize>() as i32
 }
