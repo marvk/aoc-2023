@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code, unused_imports, unreachable_code, unused_parens, unused_variables)]
 
 extern crate core;
 
@@ -14,7 +14,7 @@ use crate::day01::day01;
 use crate::day02::day02;
 use crate::day03::day03;
 use crate::day04::day04;
-// use crate::day05::day05;
+use crate::day05::day05;
 // use crate::day06::day06;
 // use crate::day07::day07;
 // use crate::day08::day08;
@@ -42,7 +42,7 @@ mod day01;
 mod day02;
 mod day03;
 mod day04;
-// mod day05;
+mod day05;
 // mod day06;
 // mod day07;
 // mod day08;
@@ -70,7 +70,7 @@ fn main() {
         day02().f(),
         day03().f(),
         day04().f(),
-        // day05().f(),
+        day05().f(),
         // day06().f(),
         // day07().f(),
         // day08().f(),
@@ -93,6 +93,9 @@ fn main() {
         // day25().f(),
     ];
 
+    // day05().run_part1_test();
+    //
+    // panic!();
 
     let run_one = |id: usize| (days[id - 1].f)();
 
