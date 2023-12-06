@@ -1,9 +1,3 @@
-#![allow(warnings, unused)]
-
-use std::cmp::min;
-use std::ops::Range;
-use std::str::FromStr;
-
 use regex::Regex;
 
 use crate::harness::{Day, Part};
@@ -34,7 +28,7 @@ impl Part<u64> for Part2 {
     fn solve(&self, input: &[String]) -> u64 {
         let input =
             input.iter()
-                .map(|s| s.replace(" ", "").replace(":", " "))
+                .map(|s| s.replace(' ', "").replace(':', " "))
                 .collect::<Vec<_>>();
 
         solve(&input)
@@ -42,15 +36,32 @@ impl Part<u64> for Part2 {
 }
 
 fn solve(input: &[String]) -> u64 {
-    Races::from(input)
-        .races
-        .into_iter()
-        .map(|race|
-            (0..=race.time)
-                .filter(|time_held| (race.time - time_held) * time_held > race.distance_record)
-                .count() as u64
-        )
+    Races::from(input).races
+        .iter()
+        .map(solve_race_algebraic)
         .product()
+}
+
+fn solve_race_algebraic(race: &Race) -> u64 {
+    let a = -1.0;
+    let b = race.time as f64;
+    let c = -(race.distance_record as f64 + 1.0);
+
+    let sqrt_component = (b.powi(2) - 4.0 * a * c).sqrt();
+    let r1 = (-b + sqrt_component) / 2.0 * a;
+    let r2 = (-b - sqrt_component) / 2.0 * a;
+
+    let min = r1.min(r2).ceil() as u64;
+    let max = r1.max(r2).floor() as u64;
+
+    max - min + 1
+}
+
+#[allow(dead_code)]
+fn solve_race_brute_force(race: &Race) -> u64 {
+    (0..=race.time)
+        .filter(|time_held| (race.time - time_held) * time_held > race.distance_record)
+        .count() as u64
 }
 
 #[derive(Debug)]
