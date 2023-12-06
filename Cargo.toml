@@ -11,3 +11,4 @@ panic = "abort"
 [dependencies]
 colored = "2.0.0"
 rand = "0.8.5"
+regex = "1.10.2"
