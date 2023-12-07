@@ -1,11 +1,5 @@
-#![allow(warnings, unused)]
-
-use std::cmp::{max, min};
 use std::collections::HashSet;
-use std::ops::Range;
 use std::str::FromStr;
-
-use regex::Regex;
 
 use crate::harness::{Day, Part};
 
@@ -21,23 +15,11 @@ impl Part<u64> for Part1 {
     }
 
     fn solve(&self, input: &[String]) -> u64 {
-        let mut vec = input.into_iter()
-            .filter(|s| !s.is_empty())
-            .map(|l| {
-                let mut split = l.split(" ");
-                Hand::new_part_1(
-                    split.next().unwrap().to_string(),
-                    split.next().unwrap().parse().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut hands = parse(input);
 
-        vec.sort_by_cached_key(|h| (h.hand_type, h.card_values[0], h.card_values[1], h.card_values[2], h.card_values[3], h.card_values[4]));
+        sort(&mut hands, calculate_card_value_part_1, HandType::calculate_part_1);
 
-        vec.iter()
-            .enumerate()
-            .map(|(i, &Hand { bid, .. })| (i + 1) as u64 * bid as u64)
-            .sum()
+        solve(&hands)
     }
 }
 
@@ -49,23 +31,56 @@ impl Part<u64> for Part2 {
     }
 
     fn solve(&self, input: &[String]) -> u64 {
-        let mut vec = input.into_iter()
-            .filter(|s| !s.is_empty())
-            .map(|l| {
-                let mut split = l.split(" ");
-                Hand::new_part_2(
-                    split.next().unwrap().to_string(),
-                    split.next().unwrap().parse().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut hands = parse(input);
 
-        vec.sort_by_cached_key(|h| (h.hand_type, h.card_values[0], h.card_values[1], h.card_values[2], h.card_values[3], h.card_values[4]));
+        sort(&mut hands, calculate_card_value_part_2, HandType::calculate_part_2);
 
-        vec.iter()
-            .enumerate()
-            .map(|(i, &Hand { bid, .. })| (i + 1) as u64 * bid as u64)
-            .sum()
+        solve(&hands)
+    }
+}
+
+fn parse(input: &[String]) -> Vec<Hand> {
+    input.iter()
+        .filter(|s| !s.is_empty())
+        .map(|l| Hand::from_str(l).unwrap())
+        .collect::<Vec<_>>()
+}
+
+fn sort(hands: &mut [Hand], calculate_card_value: fn(char) -> u32, calculate_hand_type: fn(&str) -> HandType) {
+    hands.sort_by_cached_key(|h| {
+        let card_values = h.cards.chars().map(calculate_card_value).collect::<Vec<_>>();
+        (calculate_hand_type(&h.cards), card_values[0], card_values[1], card_values[2], card_values[3], card_values[4])
+    })
+}
+
+fn solve(hands: &[Hand]) -> u64 {
+    hands.iter()
+        .enumerate()
+        .map(|(i, &Hand { bid, .. })| (i + 1) as u64 * bid as u64)
+        .sum()
+}
+
+fn calculate_card_value_part_1(c: char) -> u32 {
+    match c {
+        'A' => 14,
+        'K' => 13,
+        'Q' => 12,
+        'J' => 11,
+        'T' => 10,
+        _ if c.is_numeric() => c.to_digit(10).unwrap(),
+        _ => panic!(),
+    }
+}
+
+fn calculate_card_value_part_2(c: char) -> u32 {
+    match c {
+        'A' => 14,
+        'K' => 13,
+        'Q' => 12,
+        'T' => 10,
+        _ if c.is_numeric() => c.to_digit(10).unwrap(),
+        'J' => 0,
+        _ => panic!(),
     }
 }
 
@@ -116,7 +131,6 @@ impl HandType {
         let distinct_count = distinct_chars.len();
         let joker_count = cards.chars().filter(|&c| c == 'J').count();
 
-
         match (joker_count, distinct_count) {
             (5, _) | (4, _) | (_, 1) => Self::FiveOfAKind,
             (3 | 2, 2) => Self::FourOfAKind,
@@ -141,47 +155,24 @@ impl HandType {
 #[derive(Debug)]
 struct Hand {
     cards: String,
-    card_values: Vec<u32>,
     bid: u32,
-    hand_type: HandType,
 }
 
 impl Hand {
-    pub fn new_part_1(cards: String, bid: u32) -> Self {
-        let hand_type = HandType::calculate_part_1(&cards);
-
-        let card_values = cards.chars().map(Self::calculate_card_value_part_1).collect();
-        Self { cards, card_values, bid, hand_type }
+    pub fn new(cards: String, bid: u32) -> Self {
+        Self { cards, bid }
     }
+}
 
-    pub fn new_part_2(cards: String, bid: u32) -> Self {
-        let hand_type = HandType::calculate_part_2(&cards);
+impl FromStr for Hand {
+    type Err = ();
 
-        let card_values = cards.chars().map(Self::calculate_card_value_part_2).collect();
-        Self { cards, card_values, bid, hand_type }
-    }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.split(' ');
 
-    fn calculate_card_value_part_1(c: char) -> u32 {
-        match c {
-            'A' => 14,
-            'K' => 13,
-            'Q' => 12,
-            'J' => 11,
-            'T' => 10,
-            _ if c.is_numeric() => c.to_digit(10).unwrap(),
-            _ => panic!(),
-        }
-    }
-
-    fn calculate_card_value_part_2(c: char) -> u32 {
-        match c {
-            'A' => 14,
-            'K' => 13,
-            'Q' => 12,
-            'T' => 10,
-            _ if c.is_numeric() => c.to_digit(10).unwrap(),
-            'J' => 0,
-            _ => panic!(),
-        }
+        Ok(Self::new(
+            split.next().unwrap().to_string(),
+            split.next().unwrap().parse().unwrap(),
+        ))
     }
 }
