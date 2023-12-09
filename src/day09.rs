@@ -59,14 +59,5 @@ fn solve(input: Vec<i64>) -> i64 {
         history.push(next_step);
     }
 
-    history.last_mut().unwrap().push(0);
-
-    for i in (1..history.len()).rev() {
-        let difference = history[i].last().unwrap();
-        let subtrahend = history[i - 1].last().unwrap();
-        let minuend = difference + subtrahend;
-        history[i - 1].push(minuend);
-    }
-
-    *history.first().unwrap().last().unwrap()
+    history.iter().map(|e| *e.last().unwrap()).sum()
 }
