@@ -1,3 +1,5 @@
+use std::iter::successors;
+
 use crate::harness::{Day, Part};
 
 pub fn day09() -> Day<i64, i64> {
@@ -39,25 +41,25 @@ impl Part<i64> for Part2 {
 fn parse(input: &[String]) -> Vec<Vec<i64>> {
     input.iter()
         .filter(|l| !l.is_empty())
-        .map(|l|
-            l.split(' ')
-                .map(|e| e.parse::<i64>().unwrap())
-                .collect()
-        )
+        .map(|l| parse_line(l))
+        .collect()
+}
+
+fn parse_line(line: &str) -> Vec<i64> {
+    line.split(' ')
+        .map(|e| e.parse::<i64>().unwrap())
         .collect()
 }
 
 fn solve(input: Vec<i64>) -> i64 {
-    let mut history = vec![input];
+    successors(Some(input), |last| Some(next(last)))
+        .take_while(|l| l.iter().any(|&e| e != 0))
+        .map(|l| *l.last().unwrap())
+        .sum()
+}
 
-    while history.last().unwrap().iter().any(|&e| e != 0) {
-        let next_step =
-            history.last().unwrap().windows(2)
-                .map(|e| e[1] - e[0])
-                .collect();
-
-        history.push(next_step);
-    }
-
-    history.iter().map(|e| *e.last().unwrap()).sum()
+fn next(l: &[i64]) -> Vec<i64> {
+    l.windows(2)
+        .map(|e| e[1] - e[0])
+        .collect()
 }
