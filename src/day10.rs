@@ -1,5 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Display;
+use std::iter::successors;
 use std::ops::{Add, Sub};
 
 use crate::harness::{Day, Part};
@@ -114,10 +115,11 @@ impl Map {
     fn calculate_polygon(&self) -> Vec<Vec2> {
         let mut polygon = vec![self.start];
 
-        while let Some(next) = self.connections_map[polygon.last().unwrap()].iter().find(|&to| Some(to) != polygon.get(polygon.len().saturating_sub(2))) {
-            if *next == self.start {
-                break;
-            }
+        while let Some(next) =
+            self.connections_map[polygon.last().unwrap()].iter()
+                .find(|&to| Some(to) != polygon.get(polygon.len().wrapping_sub(2)))
+                .filter(|&&next| next != self.start)
+        {
             polygon.push(*next);
         }
 
@@ -154,30 +156,23 @@ impl Map {
 
 impl From<&[String]> for Map {
     fn from(value: &[String]) -> Self {
-        let connections_map =
-            value.iter()
-                .filter(|l| !l.is_empty())
-                .enumerate()
-                .flat_map(|(y, s)|
-                    s.chars().enumerate()
-                        .flat_map(move |(x, c)| {
-                            let p = v(x as i32, y as i32);
-                            neighbours(c).into_iter().map(move |n| (p, n + p))
-                        })
-                )
-                .fold(HashMap::<Vec2, Vec<Vec2>>::new(), |mut acc, e| {
-                    acc.entry(e.0).or_insert_with(Vec::new).push(e.1);
-                    acc
-                });
+        let mut connections_map = HashMap::new();
+        let mut start = None;
 
-        let start =
-            *connections_map.iter()
-                .filter(|(_, v)| v.len() == 4)
-                .map(|(k, _)| k)
-                .next()
-                .unwrap();
+        for (y, s) in value.iter().enumerate() {
+            for (x, c) in s.chars().enumerate() {
+                let p = v(x as i32, y as i32);
 
-        Map::new(start, connections_map)
+                if c == 'S' {
+                    start = Some(p);
+                }
+
+                let neighbours = neighbours(c).into_iter().map(|e| e + p).collect::<Vec<_>>();
+                connections_map.insert(p, neighbours);
+            }
+        }
+
+        Map::new(start.unwrap(), connections_map)
     }
 }
 
@@ -208,15 +203,9 @@ struct Vec2 {
 
 impl Vec2 {
     pub const NORTH: Self = v(0, -1);
-    pub const NORTH_EAST: Self = v(1, -1);
     pub const EAST: Self = v(1, 0);
-    pub const SOUTH_EAST: Self = v(1, 1);
     pub const SOUTH: Self = v(0, 1);
-    pub const SOUTH_WEST: Self = v(-1, 1);
     pub const WEST: Self = v(-1, 0);
-    pub const NORTH_WEST: Self = v(-1, -1);
-
-    pub const DIRECTIONS: [Self; 8] = [Self::NORTH, Self::NORTH_EAST, Self::EAST, Self::SOUTH_EAST, Self::SOUTH, Self::SOUTH_WEST, Self::WEST, Self::NORTH_WEST];
 
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
