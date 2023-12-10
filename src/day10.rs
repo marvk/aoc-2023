@@ -1,5 +1,5 @@
-use std::collections::{HashSet, VecDeque};
-use std::fmt::{Display, Formatter};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Display;
 use std::ops::{Add, Sub};
 
 use crate::harness::{Day, Part};
@@ -31,9 +31,8 @@ impl Part<i32> for Part1 {
 
             closed.insert(position);
 
-            map.connections.iter()
-                .filter(|(from, _)| *from == position)
-                .map(|(_, to)| *to)
+            map.connections_map[&position].iter()
+                .cloned()
                 .filter(|to| !closed.contains(to))
                 .map(|to| (dist_from_start + 1, to))
                 .for_each(|next| {
@@ -63,7 +62,7 @@ impl Part<i32> for Part2 {
         let mut closed = HashSet::new();
         closed.insert(map.start);
 
-        while let Some((_, next)) = map.connections.iter().filter(|(from, to)| !closed.contains(to)).find(|(from, to)| from == polygon.last().unwrap()) {
+        while let Some(next) = map.connections_map[polygon.last().unwrap()].iter().find(|to| !closed.contains(to)) {
             if *next == map.start {
                 break;
             }
@@ -100,28 +99,29 @@ impl Part<i32> for Part2 {
         polygon.push(polygon[0]);
         polygon.push(polygon[1]);
 
-        let trimmings: f64 = polygon.windows(3).map(|x| {
-            let from_direction = x[0] - x[1];
-            let to_direction = x[2] - x[1];
+        let trimmings: f64 = polygon.windows(3)
+            .map(|x| {
+                let from_direction = x[0] - x[1];
+                let to_direction = x[2] - x[1];
 
+                match (from_direction, to_direction) {
+                    (Vec2::NORTH, Vec2::SOUTH) |
+                    (Vec2::SOUTH, Vec2::NORTH) |
+                    (Vec2::EAST, Vec2::WEST) |
+                    (Vec2::WEST, Vec2::EAST) => 0.5,
+                    (Vec2::WEST, Vec2::SOUTH) |
+                    (Vec2::NORTH, Vec2::WEST) |
+                    (Vec2::EAST, Vec2::NORTH) |
+                    (Vec2::SOUTH, Vec2::EAST) => 0.25,
+                    (Vec2::WEST, Vec2::NORTH) |
+                    (Vec2::NORTH, Vec2::EAST) |
+                    (Vec2::EAST, Vec2::SOUTH) |
+                    (Vec2::SOUTH, Vec2::WEST) => 0.75,
 
-            match (from_direction, to_direction) {
-                (Vec2::NORTH, Vec2::SOUTH) |
-                (Vec2::SOUTH, Vec2::NORTH) |
-                (Vec2::EAST, Vec2::WEST) |
-                (Vec2::WEST, Vec2::EAST) => 0.5,
-                (Vec2::WEST, Vec2::SOUTH) |
-                (Vec2::NORTH, Vec2::WEST) |
-                (Vec2::EAST, Vec2::NORTH) |
-                (Vec2::SOUTH, Vec2::EAST) => 0.25,
-                (Vec2::WEST, Vec2::NORTH) |
-                (Vec2::NORTH, Vec2::EAST) |
-                (Vec2::EAST, Vec2::SOUTH) |
-                (Vec2::SOUTH, Vec2::WEST) => 0.75,
-
-                _ => panic!(),
-            }
-        }).sum();
+                    _ => panic!(),
+                }
+            })
+            .sum();
 
         let x1 = area as f64 - trimmings;
 
@@ -131,63 +131,44 @@ impl Part<i32> for Part2 {
 
 struct Map {
     start: Vec2,
-    connections: Vec<(Vec2, Vec2)>,
+    connections_map: HashMap<Vec2, Vec<Vec2>>,
 }
 
 impl Map {
-    fn new(start: Vec2, connections: Vec<(Vec2, Vec2)>) -> Self {
-        Self { start, connections }
+    pub fn new(start: Vec2, connections2: HashMap<Vec2, Vec<Vec2>>) -> Self {
+        Self { start, connections_map: connections2 }
+    }
+
+    fn num_edges(&self) -> usize {
+        self.connections_map.values().map(Vec::len).sum()
     }
 
     fn cull_connections(&mut self) {
         loop {
-            let previous_size = self.connections.len();
+            let previous_size = self.num_edges();
 
-            self.connections =
-                self.connections.clone().into_iter()
-                    .filter(|(from, to)|
-                        self.connections.iter()
-                            .any(|(other_from, other_to)| to == other_from && from == other_to)
-                    )
-                    .collect::<Vec<_>>();
+            self.connections_map =
+                self.connections_map.clone().into_iter()
+                    .map(|(from, tos)| (
+                        from,
+                        tos.into_iter()
+                            .filter(|to|
+                                self.connections_map[&from].contains(to) &&
+                                    self.connections_map.get(to).map(|l| l.contains(&from)).unwrap_or(false)
+                            )
+                            .collect()
+                    ))
+                    .collect();
 
-            if self.connections.len() == previous_size {
+            if self.num_edges() == previous_size {
                 break;
             }
         }
     }
 }
 
-impl Display for Map {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let vec1 = self.connections.iter().flat_map(|e| vec![e.0, e.1]).collect::<HashSet<_>>();
-
-        let min_x = vec1.iter().map(|p| p.x).min().unwrap();
-        let min_y = vec1.iter().map(|p| p.y).min().unwrap();
-        let max_x = vec1.iter().map(|p| p.x).max().unwrap();
-        let max_y = vec1.iter().map(|p| p.y).max().unwrap();
-
-        let min = v(min_x, min_y);
-        let max = v(max_x, max_y);
-
-        // let width = max_x - min_x;
-
-        todo!()
-    }
-}
-
 impl From<&[String]> for Map {
     fn from(value: &[String]) -> Self {
-        let connections = value.iter()
-            .filter(|l| !l.is_empty())
-            .enumerate()
-            .flat_map(|(y, s)|
-                s.chars().enumerate().flat_map(move |(x, c)| {
-                    let p = v(x as i32, y as i32);
-                    neighbours(c).into_iter().map(move |n| (p, n + p))
-                })
-            ).collect::<Vec<_>>();
-
         let start = value.iter()
             .enumerate()
             .find_map(|(y, l)| l.chars().enumerate().find_map(|(x, c)| {
@@ -199,7 +180,23 @@ impl From<&[String]> for Map {
             }))
             .unwrap();
 
-        Map::new(start, connections)
+        let connections_map =
+            value.iter()
+                .filter(|l| !l.is_empty())
+                .enumerate()
+                .flat_map(|(y, s)|
+                    s.chars().enumerate()
+                        .flat_map(move |(x, c)| {
+                            let p = v(x as i32, y as i32);
+                            neighbours(c).into_iter().map(move |n| (p, n + p))
+                        })
+                )
+                .fold(HashMap::<Vec2, Vec<Vec2>>::new(), |mut acc, e| {
+                    acc.entry(e.0).or_insert_with(Vec::new).push(e.1);
+                    acc
+                });
+
+        Map::new(start, connections_map)
     }
 }
 
