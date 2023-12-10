@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Display;
-use std::iter::successors;
 use std::ops::{Add, Sub};
 
 use crate::harness::{Day, Part};
@@ -37,69 +35,21 @@ impl Part<i32> for Part2 {
 
         map.cull_dead_ends();
 
-        let mut polygon = map.calculate_polygon();
+        let polygon = map.calculate_polygon();
 
-        let area = calculate_area(&polygon);
-
-        if calculate_direction(&polygon) > 0 {
-            polygon.reverse()
-        }
-
-        polygon.push(polygon[0]);
-        polygon.push(polygon[1]);
-
-        let trimmings: f64 = trimmings(&polygon);
-
-        (area as f64 - trimmings) as i32
+        calculate_area(&polygon) - calculate_trimmings(&polygon)
     }
 }
 
 fn calculate_area(polygon: &[Vec2]) -> i32 {
-    let n = polygon.len();
-
-    let mut sum1 = 0;
-    let mut sum2 = 0;
-
-    for i in 0..(n - 1) {
-        sum1 += polygon[i].x * polygon[i + 1].y;
-        sum2 += polygon[i].y * polygon[i + 1].x;
-    }
-
-    sum1 += polygon[n - 1].x * polygon[0].y;
-    sum2 += polygon[n - 1].y * polygon[0].x;
-
-    (sum1 - sum2).abs() / 2
+    (0..polygon.len()).map(|i|
+        polygon[i].x * polygon[(i + 1) % polygon.len()].y
+            - polygon[i].y * polygon[(i + 1) % polygon.len()].x
+    ).sum::<i32>().abs() / 2
 }
 
-fn calculate_direction(polygon: &[Vec2]) -> i32 {
-    polygon.windows(2)
-        .map(|points| (points[1].x - points[0].x) * (points[1].y + points[0].y))
-        .sum()
-}
-
-fn trimmings(polygon: &[Vec2]) -> f64 {
-    polygon.windows(3)
-        .map(|x| {
-            let from_direction = x[0] - x[1];
-            let to_direction = x[2] - x[1];
-
-            match (from_direction, to_direction) {
-                (Vec2::NORTH, Vec2::SOUTH) |
-                (Vec2::SOUTH, Vec2::NORTH) |
-                (Vec2::EAST, Vec2::WEST) |
-                (Vec2::WEST, Vec2::EAST) => 0.5,
-                (Vec2::WEST, Vec2::SOUTH) |
-                (Vec2::NORTH, Vec2::WEST) |
-                (Vec2::EAST, Vec2::NORTH) |
-                (Vec2::SOUTH, Vec2::EAST) => 0.25,
-                (Vec2::WEST, Vec2::NORTH) |
-                (Vec2::NORTH, Vec2::EAST) |
-                (Vec2::EAST, Vec2::SOUTH) |
-                (Vec2::SOUTH, Vec2::WEST) => 0.75,
-                _ => panic!(),
-            }
-        })
-        .sum()
+fn calculate_trimmings(polygon: &[Vec2]) -> i32 {
+    polygon.len() as i32 / 2 - 1
 }
 
 struct Map {
