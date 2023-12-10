@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::ops::{Add, Sub};
 
@@ -18,30 +18,9 @@ impl Part<i32> for Part1 {
     fn solve(&self, input: &[String]) -> i32 {
         let mut map = Map::from(input);
 
-        map.cull_connections();
+        map.cull_dead_ends();
 
-        let mut open = VecDeque::new();
-        open.push_back((0, map.start));
-
-        let mut closed = HashSet::new();
-        let mut result = vec![];
-
-        while !open.is_empty() {
-            let (dist_from_start, position) = open.pop_front().unwrap();
-
-            closed.insert(position);
-
-            map.connections_map[&position].iter()
-                .cloned()
-                .filter(|to| !closed.contains(to))
-                .map(|to| (dist_from_start + 1, to))
-                .for_each(|next| {
-                    open.push_back(next);
-                    result.push(next);
-                });
-        }
-
-        result.iter().map(|(dist, _)| *dist).max().unwrap()
+        (map.num_edges() / 4) as i32
     }
 }
 
@@ -55,78 +34,71 @@ impl Part<i32> for Part2 {
     fn solve(&self, input: &[String]) -> i32 {
         let mut map = Map::from(input);
 
-        map.cull_connections();
+        map.cull_dead_ends();
 
-        let mut polygon = vec![map.start];
+        let mut polygon = map.calculate_polygon();
 
-        let mut closed = HashSet::new();
-        closed.insert(map.start);
+        let area = calculate_area(&polygon);
 
-        while let Some(next) = map.connections_map[polygon.last().unwrap()].iter().find(|to| !closed.contains(to)) {
-            if *next == map.start {
-                break;
-            }
-            polygon.push(*next);
-            closed.insert(*next);
-        }
-
-        let n = polygon.len();
-
-        let mut sum1 = 0;
-        let mut sum2 = 0;
-
-        for i in 0..(n - 1) {
-            sum1 += polygon[i].x * polygon[i + 1].y;
-            sum2 += polygon[i].y * polygon[i + 1].x;
-        }
-
-        sum1 += polygon[n - 1].x * polygon[0].y;
-        sum2 += polygon[n - 1].y * polygon[0].x;
-
-        let area = (sum1 - sum2).abs() / 2;
-
-        let direction: i32 = polygon.windows(2).map(|points| {
-            let p1 = points[0];
-            let p2 = points[1];
-
-            (p2.x - p1.x) * (p2.y + p1.y)
-        }).sum();
-
-        if direction > 0 {
+        if calculate_direction(&polygon) > 0 {
             polygon.reverse()
         }
 
         polygon.push(polygon[0]);
         polygon.push(polygon[1]);
 
-        let trimmings: f64 = polygon.windows(3)
-            .map(|x| {
-                let from_direction = x[0] - x[1];
-                let to_direction = x[2] - x[1];
+        let trimmings: f64 = trimmings(&polygon);
 
-                match (from_direction, to_direction) {
-                    (Vec2::NORTH, Vec2::SOUTH) |
-                    (Vec2::SOUTH, Vec2::NORTH) |
-                    (Vec2::EAST, Vec2::WEST) |
-                    (Vec2::WEST, Vec2::EAST) => 0.5,
-                    (Vec2::WEST, Vec2::SOUTH) |
-                    (Vec2::NORTH, Vec2::WEST) |
-                    (Vec2::EAST, Vec2::NORTH) |
-                    (Vec2::SOUTH, Vec2::EAST) => 0.25,
-                    (Vec2::WEST, Vec2::NORTH) |
-                    (Vec2::NORTH, Vec2::EAST) |
-                    (Vec2::EAST, Vec2::SOUTH) |
-                    (Vec2::SOUTH, Vec2::WEST) => 0.75,
-
-                    _ => panic!(),
-                }
-            })
-            .sum();
-
-        let x1 = area as f64 - trimmings;
-
-        x1 as i32
+        (area as f64 - trimmings) as i32
     }
+}
+
+fn calculate_area(polygon: &[Vec2]) -> i32 {
+    let n = polygon.len();
+
+    let mut sum1 = 0;
+    let mut sum2 = 0;
+
+    for i in 0..(n - 1) {
+        sum1 += polygon[i].x * polygon[i + 1].y;
+        sum2 += polygon[i].y * polygon[i + 1].x;
+    }
+
+    sum1 += polygon[n - 1].x * polygon[0].y;
+    sum2 += polygon[n - 1].y * polygon[0].x;
+
+    (sum1 - sum2).abs() / 2
+}
+
+fn calculate_direction(polygon: &[Vec2]) -> i32 {
+    polygon.windows(2)
+        .map(|points| (points[1].x - points[0].x) * (points[1].y + points[0].y))
+        .sum()
+}
+
+fn trimmings(polygon: &[Vec2]) -> f64 {
+    polygon.windows(3)
+        .map(|x| {
+            let from_direction = x[0] - x[1];
+            let to_direction = x[2] - x[1];
+
+            match (from_direction, to_direction) {
+                (Vec2::NORTH, Vec2::SOUTH) |
+                (Vec2::SOUTH, Vec2::NORTH) |
+                (Vec2::EAST, Vec2::WEST) |
+                (Vec2::WEST, Vec2::EAST) => 0.5,
+                (Vec2::WEST, Vec2::SOUTH) |
+                (Vec2::NORTH, Vec2::WEST) |
+                (Vec2::EAST, Vec2::NORTH) |
+                (Vec2::SOUTH, Vec2::EAST) => 0.25,
+                (Vec2::WEST, Vec2::NORTH) |
+                (Vec2::NORTH, Vec2::EAST) |
+                (Vec2::EAST, Vec2::SOUTH) |
+                (Vec2::SOUTH, Vec2::WEST) => 0.75,
+                _ => panic!(),
+            }
+        })
+        .sum()
 }
 
 struct Map {
@@ -139,11 +111,24 @@ impl Map {
         Self { start, connections_map: connections2 }
     }
 
+    fn calculate_polygon(&self) -> Vec<Vec2> {
+        let mut polygon = vec![self.start];
+
+        while let Some(next) = self.connections_map[polygon.last().unwrap()].iter().find(|&to| Some(to) != polygon.get(polygon.len().saturating_sub(2))) {
+            if *next == self.start {
+                break;
+            }
+            polygon.push(*next);
+        }
+
+        polygon
+    }
+
     fn num_edges(&self) -> usize {
         self.connections_map.values().map(Vec::len).sum()
     }
 
-    fn cull_connections(&mut self) {
+    fn cull_dead_ends(&mut self) {
         loop {
             let previous_size = self.num_edges();
 
@@ -169,17 +154,6 @@ impl Map {
 
 impl From<&[String]> for Map {
     fn from(value: &[String]) -> Self {
-        let start = value.iter()
-            .enumerate()
-            .find_map(|(y, l)| l.chars().enumerate().find_map(|(x, c)| {
-                if c == 'S' {
-                    Some(v(x as i32, y as i32))
-                } else {
-                    None
-                }
-            }))
-            .unwrap();
-
         let connections_map =
             value.iter()
                 .filter(|l| !l.is_empty())
@@ -195,6 +169,13 @@ impl From<&[String]> for Map {
                     acc.entry(e.0).or_insert_with(Vec::new).push(e.1);
                     acc
                 });
+
+        let start =
+            *connections_map.iter()
+                .filter(|(_, v)| v.len() == 4)
+                .map(|(k, _)| k)
+                .next()
+                .unwrap();
 
         Map::new(start, connections_map)
     }
