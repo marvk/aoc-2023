@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Display;
-use std::hash::Hash;
 
 use crate::harness::{Day, Part};
 
@@ -28,50 +26,48 @@ impl Part<i32> for Part2 {
     }
 
     fn solve(&self, input: &[String]) -> i32 {
-        let mut map = HashMap::new();
+        let mut map = HashMap::<i32, Vec<(&str, i32)>>::new();
 
-        for i in 0..256 {
-            map.insert(i, Vec::<(&str, i32)>::new());
-        }
+        for element in input.first().unwrap().split(',') {
+            if element.contains('-') {
+                let name = element.split('-').next().unwrap();
+                let hash_number = hash(name);
 
-        for x in input.first().unwrap().split(',') {
-            if x.contains('-') {
-                let str = x.split('-').next().unwrap();
-                let b = hash(str);
-                if let Some(vec) = map.get_mut(&b) {
-                    vec.retain(|e| e.0 != str);
-                }
+                let bucket = map.entry(hash_number).or_default();
+
+                bucket.retain(|e| e.0 != name);
             } else {
-                let mut split = x.split("=");
-                let a = split.next().unwrap();
-                let b = split.next().unwrap();
+                let mut split = element.split('=');
 
-                let option = map.get_mut(&hash(a)).unwrap();
-                let e = (a, b.parse::<i32>().unwrap());
+                let name = split.next().unwrap();
+                let hash_number = hash(name);
+                let number = split.next().unwrap();
+
+                let bucket = map.entry(hash_number).or_default();
+
+                let new_element = (name, number.parse::<i32>().unwrap());
                 let mut inserted = false;
-                for i in 0..option.len() {
-                    let x1 = option[i];
-                    if x1.0 == a {
-                        option[i] = e;
+                for i in 0..bucket.len() {
+                    if bucket[i].0 == name {
+                        bucket[i] = new_element;
                         inserted = true;
+                        break;
                     }
                 }
                 if !inserted {
-                    option.push(e);
+                    bucket.push(new_element);
                 }
             }
         }
 
-        for (i, m) in &map {
-            if !m.is_empty() {
-                println!("a");
-                println!("{}: {:?}", i, m);
-            }
-        }
-
-        map.iter().map(|(i, vec)| {
-            (*i + 1) * vec.iter().enumerate().map(|(j, e)| (j as i32 +1) * e.1).sum::<i32>()
-        }).sum()
+        map.iter()
+            .map(|(bucket_index, bucket)|
+                (*bucket_index + 1) * bucket.iter()
+                    .enumerate()
+                    .map(|(element_index, element)| (element_index as i32 + 1) * element.1)
+                    .sum::<i32>()
+            )
+            .sum()
     }
 }
 
