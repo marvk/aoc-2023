@@ -1,80 +1,49 @@
-use std::collections::{HashSet, VecDeque};
-use std::fmt::Display;
+use std::collections::HashSet;
 use std::hash::Hash;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Neg};
 
 use crate::harness::{Day, Part};
 
-pub fn day16() -> Day<i32, i32> {
+pub fn day16() -> Day<usize, usize> {
     Day::new(16, Box::new(Part1 {}), Box::new(Part2 {}))
 }
 
 pub struct Part1;
 
-impl Part<i32> for Part1 {
-    fn expect_test(&self) -> i32 {
+impl Part<usize> for Part1 {
+    fn expect_test(&self) -> usize {
         46
     }
 
-    fn solve(&self, input: &[String]) -> i32 {
-        let map = Map::from(input);
-
-        let ray = Ray::new(v(0, 0), Vec2::EAST);
-
-        calculate_energy(&map, ray)
+    fn solve(&self, input: &[String]) -> usize {
+        Map::from(input)
+            .calculate_energy2(Ray::new(v(0, 0), Vec2::EAST))
     }
 }
 
 pub struct Part2;
 
-impl Part<i32> for Part2 {
-    fn expect_test(&self) -> i32 {
+impl Part<usize> for Part2 {
+    fn expect_test(&self) -> usize {
         51
     }
 
-    fn solve(&self, input: &[String]) -> i32 {
+    fn solve(&self, input: &[String]) -> usize {
         let map = Map::from(input);
 
-        let mut i1 =
+        let i1 =
             (0..(map.width() as i32))
-                .flat_map(|x| vec![Ray::new(v(x, 0), Vec2::SOUTH), Ray::new(v(x, map.height() as i32 - 1), Vec2::NORTH)])
-                .collect::<Vec<_>>();
+                .flat_map(|x| vec![Ray::new(v(x, 0), Vec2::SOUTH), Ray::new(v(x, map.height() as i32 - 1), Vec2::NORTH)]);
 
-        let mut i2 =
+        let i2 =
             (0..(map.height() as i32))
-                .flat_map(|y| vec![Ray::new(v(0, y), Vec2::EAST), Ray::new(v(map.width() as i32 - 1, y), Vec2::WEST)])
-                .collect::<Vec<_>>();
+                .flat_map(|y| vec![Ray::new(v(0, y), Vec2::EAST), Ray::new(v(map.width() as i32 - 1, y), Vec2::WEST)]);
 
-        i1.append(&mut i2);
-
-        i1.iter().map(|r| calculate_energy(&map, *r)).max().unwrap()
+        i1.chain(i2)
+            .map(|r| map.calculate_energy2(r))
+            .max()
+            .unwrap()
     }
-}
-
-fn calculate_energy(map: &Map, ray: Ray) -> i32 {
-    let mut energized = HashSet::<Vec2>::new();
-
-    let mut open = VecDeque::new();
-    open.push_back(ray);
-
-    let mut closed = HashSet::new();
-
-
-    while let Some(current) = open.pop_front() {
-        if !closed.contains(&current) && map.is_in_bounds(&current.position) {
-            closed.insert(current);
-            energized.insert(current.position);
-
-            let char = map.raw[current.position.y as usize][current.position.x as usize];
-
-
-            for x in current.next(char) {
-                open.push_back(x);
-            }
-        }
-    }
-
-    energized.len() as i32
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -88,25 +57,8 @@ impl Ray {
         Self { position, direction }
     }
 
-    fn next(&self, c: char) -> Vec<Self> {
-        match (c, &self.direction) {
-            ('.', _) |
-            ('|', &Vec2::NORTH | &Vec2::SOUTH) |
-            ('-', &Vec2::EAST | &Vec2::WEST) => vec![self.direction],
-            ('/', &Vec2::NORTH) => vec![Vec2::EAST],
-            ('/', &Vec2::EAST) => vec![Vec2::NORTH],
-            ('/', &Vec2::SOUTH) => vec![Vec2::WEST],
-            ('/', &Vec2::WEST) => vec![Vec2::SOUTH],
-            ('\\', &Vec2::NORTH) => vec![Vec2::WEST],
-            ('\\', &Vec2::EAST) => vec![Vec2::SOUTH],
-            ('\\', &Vec2::SOUTH) => vec![Vec2::EAST],
-            ('\\', &Vec2::WEST) => vec![Vec2::NORTH],
-            ('|', &Vec2::EAST | &Vec2::WEST) => vec![Vec2::NORTH, Vec2::SOUTH],
-            ('-', &Vec2::NORTH | &Vec2::SOUTH) => vec![Vec2::EAST, Vec2::WEST],
-            _ => panic!()
-        }.into_iter()
-            .map(|new_direction| Ray::new(self.position + new_direction, new_direction))
-            .collect()
+    fn shift(&self, direction: Vec2) -> Self {
+        Ray::new(self.position + direction, direction)
     }
 }
 
@@ -127,8 +79,75 @@ impl Map {
         self.raw.len()
     }
 
-    fn is_in_bounds(&self, vec: &Vec2) -> bool {
-        vec.x >= 0 && vec.y >= 0 && vec.x < self.width() as i32 && vec.y < self.height() as i32
+    fn get(&self, position: &Vec2) -> char {
+        self.raw[position.y as usize][position.x as usize]
+    }
+
+    fn get2(&self, position: &Vec2) -> Option<&char> {
+        self.raw
+            .get(position.y as usize)
+            .and_then(|vec| vec.get(position.x as usize))
+    }
+
+    fn calculate_energy2(&self, ray: Ray) -> usize {
+        let mut set = HashSet::new();
+        self.calculate_energy2_rec(&mut set, ray);
+        set.iter().map(|r| r.position).collect::<HashSet<_>>().len()
+    }
+
+    fn calculate_energy2_rec(&self, closed: &mut HashSet<Ray>, ray: Ray) {
+        let mut cur_ray = ray;
+        let mut cur_char;
+
+        loop {
+            cur_char = self.get2(&cur_ray.position);
+
+            if cur_char.is_none() || !closed.insert(cur_ray) {
+                return;
+            }
+
+            if cur_char.unwrap() != &'.' {
+                break;
+            }
+
+            cur_ray = cur_ray.shift(cur_ray.direction);
+        }
+
+        let ray = cur_ray;
+        let char = cur_char.unwrap();
+
+        match (char, &ray.direction) {
+            ('.', _) |
+            ('|', &Vec2::NORTH | &Vec2::SOUTH) |
+            ('-', &Vec2::EAST | &Vec2::WEST) => self.calculate_energy2_rec(closed, ray.shift(ray.direction)),
+            ('/', &Vec2::NORTH) | ('\\', &Vec2::SOUTH) => self.calculate_energy2_rec(closed, ray.shift(Vec2::EAST)),
+            ('/', &Vec2::EAST) | ('\\', &Vec2::WEST) => self.calculate_energy2_rec(closed, ray.shift(Vec2::NORTH)),
+            ('/', &Vec2::SOUTH) | ('\\', &Vec2::NORTH) => self.calculate_energy2_rec(closed, ray.shift(Vec2::WEST)),
+            ('/', &Vec2::WEST) | ('\\', &Vec2::EAST) => self.calculate_energy2_rec(closed, ray.shift(Vec2::SOUTH)),
+            ('|', &Vec2::EAST | &Vec2::WEST) => {
+                self.calculate_energy2_rec(closed, ray.shift(Vec2::NORTH));
+                self.calculate_energy2_rec(closed, ray.shift(Vec2::SOUTH));
+            }
+            ('-', &Vec2::NORTH | &Vec2::SOUTH) => {
+                self.calculate_energy2_rec(closed, ray.shift(Vec2::EAST));
+                self.calculate_energy2_rec(closed, ray.shift(Vec2::WEST));
+            }
+            _ => panic!()
+        };
+    }
+
+    #[allow(dead_code)]
+    fn print_visited(&self, set1: &HashSet<Vec2>) {
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                if set1.contains(&v_usize(x, y)) {
+                    print!("#");
+                } else {
+                    print!("{}", self.get(&v_usize(x, y)));
+                }
+            }
+            println!();
+        }
     }
 }
 
@@ -142,7 +161,6 @@ impl From<&[String]> for Map {
         Self::new(raw)
     }
 }
-
 
 const fn v(x: i32, y: i32) -> Vec2 {
     Vec2::new(x, y)
@@ -167,10 +185,6 @@ impl Vec2 {
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
-
-    pub const fn manhattan_dist(&self, other: &Vec2) -> i32 {
-        (self.x - other.x).abs() + (self.y - other.y).abs()
-    }
 }
 
 impl Add<Vec2> for Vec2 {
@@ -181,10 +195,10 @@ impl Add<Vec2> for Vec2 {
     }
 }
 
-impl Sub<Vec2> for Vec2 {
+impl Neg for Vec2 {
     type Output = Self;
 
-    fn sub(self, rhs: Vec2) -> Self::Output {
-        v(self.x - rhs.x, self.y - rhs.y)
+    fn neg(self) -> Self::Output {
+        v(-self.x, -self.y)
     }
 }
