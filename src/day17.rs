@@ -19,80 +19,34 @@ impl Part<usize> for Part1 {
     }
 
     fn solve(&self, input: &[String]) -> usize {
-        let map = Map2::from(input);
-
-        let option = map.edges.get(&v(0, 0));
-
-        for x in option.unwrap() {
-            println!("{:?}", x);
-        }
-
-        let start = v(0, 0);
-        let goal = v_usize(map.width() - 1, map.height() - 1);
-
-        let came_from = map.find_path(start, goal);
-
-        let reverse_path =
-            successors(Some(goal), |c| came_from.get(c).copied())
-                .collect::<Vec<_>>();
-
-        for y in 0..map.height() {
-            for x in 0..map.width() {
-                let c = v_usize(x, y);
-                if reverse_path.contains(&c) {
-                    print!("#");
-                } else {
-                    print!(".");
-                }
-            }
-            println!();
-        }
-
-        todo!();
+        solvify(input, 1, 3)
     }
 }
-
 
 pub struct Part2;
 
 impl Part<usize> for Part2 {
     fn expect_test(&self) -> usize {
-        todo!()
+        94
     }
 
     fn solve(&self, input: &[String]) -> usize {
-        todo!()
+        solvify(input, 4, 10)
     }
 }
 
-fn fail(input: &[String]) -> usize {
-    let map = Map::from(input);
+fn solvify(input: &[String], min_step: usize, max_step: usize) -> usize {
+    let map = Map2::from(input, min_step, max_step);
+
+    let option = map.edges.get(&v(0, 0));
 
     let start = v(0, 0);
     let goal = v_usize(map.width() - 1, map.height() - 1);
 
     let came_from = map.find_path(start, goal);
 
-    let reverse_path =
-        successors(Some(goal), |c| came_from.get(c).copied())
-            .collect::<Vec<_>>();
-
-    for y in 0..map.height() {
-        for x in 0..map.width() {
-            let c = v_usize(x, y);
-            if reverse_path.contains(&c) {
-                print!("#");
-            } else {
-                print!("{}", map.get(&c).unwrap());
-            }
-        }
-        println!();
-    }
-
-    let i = reverse_path.into_iter().map(|e| map.get(&e).unwrap()).sum::<u32>();
-    i as usize
+    came_from as usize
 }
-
 
 struct Map {
     raw: Vec<Vec<char>>,
@@ -120,7 +74,7 @@ impl Ord for Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
 struct Edge {
     from: Vec2,
     to: Vec2,
@@ -140,8 +94,9 @@ struct Map2 {
     raw: Vec<Vec<char>>,
 }
 
-impl From<&[String]> for Map2 {
-    fn from(value: &[String]) -> Self {
+
+impl Map2 {
+    fn from(value: &[String], min_step: usize, max_step: usize) -> Self {
         let map = Map::from(value);
 
         let vec =
@@ -161,7 +116,7 @@ impl From<&[String]> for Map2 {
 
                 let edges =
                     Vec2::DIRECTIONS.iter()
-                        .flat_map(|e| vec![(*e, *e), (*e, *e * 2), (*e, *e * 3)])
+                        .flat_map(|e| (min_step..=max_step).map(|step| (*e, *e * step as i32)))
                         .filter_map(|(normalized, d)| {
                             let from = current;
                             let to = current + d;
@@ -186,9 +141,8 @@ impl From<&[String]> for Map2 {
 
         Map2 { edges: result, raw: map.raw }
     }
-}
 
-impl Map2 {
+
     fn width(&self) -> usize {
         self.raw[0].len()
     }
@@ -204,72 +158,125 @@ impl Map2 {
             .map(|e| e.to_digit(10).unwrap())
     }
 
-    fn find_path(&self, start: Vec2, goal: Vec2) -> HashMap<Vec2, Vec2> {
-        let h = |v: &Vec2| v.manhattan_dist(&goal);
+    fn find_path(&self, start: Vec2, goal: Vec2) -> i32 {
+        let h = |e: &Edge| {
+            if e.direction.len() != 0 {
+                e.to.manhattan_dist(&goal) + e.cost / e.direction.len()
+            } else {
+                e.to.manhattan_dist(&goal)
+            }
+        };
 
-        let mut came_from = HashMap::<Vec2, Vec2>::new();
+        let goal_edge = Edge::new(goal, goal, Vec2::default(), Vec2::default(), 0);
 
-        let mut open_set = HashSet::<Vec2>::new();
-        open_set.insert(start);
+        let mut came_from = HashMap::<Edge, Edge>::new();
 
-        let mut g_score = HashMap::<Vec2, i32>::new();
-        g_score.insert(start, self.get(&start).unwrap()as i32);
+        let mut open_set = HashSet::<Edge>::new();
+        let start_edge = Edge::new(start, start, Vec2::default(), Vec2::default(), 0);
+        open_set.insert(start_edge);
 
-        let mut f_score = HashMap::<Vec2, i32>::new();
-        f_score.insert(start, h(&start));
+        let mut g_score = HashMap::<Edge, i32>::new();
+        g_score.insert(start_edge, 0);
+
+        let mut f_score = HashMap::<Edge, i32>::new();
+        f_score.insert(start_edge, h(&start_edge));
+
+        let mut iterations = 1;
+
+        let mut max = v(0, 0);
 
         loop {
             let current = open_set.iter().min_by_key(|&e| f_score[e]).copied();
 
-            if current.is_none() {
-                break;
-            }
 
+            if current.is_none() {
+                panic!();
+            }
 
             let current = current.unwrap();
             open_set.remove(&current);
 
-            if current == goal {
-                for x in &g_score {
-                    println!("{:?}", x);
-                }
-
-                println!("{}", "~".repeat(100));
-                println!("{}", "~".repeat(100));
-                println!("{}", "~".repeat(100));
-
-                return came_from;
+            if current.to.len() > max.len() {
+                max = current.to;
+                println!("{:?}", max);
             }
 
-            let current_pos = current;
-            let previous_pos = came_from.get(&current_pos);
-            let previous_direction = previous_pos.map(|&e1| current_pos - e1).unwrap_or_default();
+            if current == goal_edge {
+                let option = g_score.iter().find(|e| e.0 == &goal_edge);
 
-            println!("{:?}", current);
-            let vec = &self.edges[&current];
-            let edges = vec.iter()
-                .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default());
+                dbg!(option.unwrap().1);
 
-            for edge in edges {
-                println!("edge {:?}", edge);
-                let neighbour = edge.to;
+                // for x in &g_score {
+                //     println!("{:?}", x);
+                // }
 
-                let d_score = edge.cost;
+                println!("{}", "~".repeat(100));
+                println!("{}", "~".repeat(100));
+                println!("{}", "~".repeat(100));
 
-                let tentative_g_score = g_score[&current_pos] + d_score;
+                return *option.unwrap().1;
+            }
 
-                if tentative_g_score < *g_score.get(&neighbour).unwrap_or(&i32::MAX) {
-                    came_from.insert(neighbour, current_pos);
-                    g_score.insert(neighbour, tentative_g_score);
-                    f_score.insert(neighbour, tentative_g_score + h(&neighbour));
+            let previous_direction = current.direction;
 
-                    open_set.insert(neighbour);
+            let vec = &self.edges[&current.to];
+            if (current.to == goal) {
+                let next = goal_edge;
+
+                let d_score = next.cost;
+
+                let tentative_g_score = g_score[&current] + d_score;
+
+                if tentative_g_score < *g_score.get(&next).unwrap_or(&i32::MAX) {
+                    came_from.insert(next, current);
+                    g_score.insert(next, tentative_g_score);
+                    f_score.insert(next, tentative_g_score + h(&next));
+
+                    open_set.insert(next);
                 }
-            };
+            } else {
+                for &next in vec.iter()
+                    .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default()) {
+                    let d_score = next.cost;
+
+                    let tentative_g_score = g_score[&current] + d_score;
+
+                    if tentative_g_score < *g_score.get(&next).unwrap_or(&i32::MAX) {
+                        came_from.insert(next, current);
+                        g_score.insert(next, tentative_g_score);
+                        f_score.insert(next, tentative_g_score + h(&next));
+
+                        open_set.insert(next);
+                    }
+                };
+            }
+
+
+            // println!("came_from");
+            // for x in &came_from {
+            //     println!("{:?}", x);
+            // }
+            // println!("open_set");
+            // for x in &open_set {
+            //     println!("{:?}", x);
+            // }
+            // println!("g_score");
+            // for x in &g_score {
+            //     println!("{:?}", x);
+            // }
+            // println!("f_score");
+            // let mut vec1 = f_score.iter().collect::<Vec<_>>();
+            // vec1.sort_by_key(|e| e.1);
+            // for x in &vec1 {
+            //     println!("{:?}", x);
+            // }
+
+            // if iterations == 2 {
+            //     panic!();
+            // }
+            //
+            // iterations += 1;
         }
-
-
-        todo!()
     }
 }
 
@@ -400,6 +407,10 @@ impl Vec2 {
 
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }
+    }
+
+    pub const fn len(&self) -> i32 {
+        self.x.abs() + self.y.abs()
     }
 
     pub const fn manhattan_dist(&self, other: &Vec2) -> i32 {
