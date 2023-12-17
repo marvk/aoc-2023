@@ -136,15 +136,10 @@ impl Map2 {
     }
 
     fn find_path(&self, start: Vec2, goal: Vec2) -> i32 {
-        let h = |e: &Edge| {
-            e.to.manhattan_dist(&goal)
-        };
-
         let start_edge = Edge::new(start, start, Vec2::default(), Vec2::default(), 0);
-        let start_edge_f_score = h(&start_edge);
 
         let mut open_set2 = BinaryHeap::<HeapEdge>::new();
-        open_set2.push(HeapEdge(&start_edge, start_edge_f_score));
+        open_set2.push(HeapEdge(&start_edge, 0));
 
         let goal_edge = Edge::new(goal, goal, Vec2::default(), Vec2::default(), 0);
 
@@ -154,9 +149,6 @@ impl Map2 {
 
         let mut g_scores = HashMap::<&Edge, i32>::new();
         g_scores.insert(&start_edge, 0);
-
-        let mut f_scores = HashMap::<&Edge, i32>::new();
-        f_scores.insert(&start_edge, start_edge_f_score);
 
         let goal_edge_vec = vec![goal_edge];
 
@@ -191,13 +183,10 @@ impl Map2 {
                 let x = g_scores.get(next).unwrap_or(&i32::MAX);
 
                 if tentative_g_score < *x {
-                    let f_score = tentative_g_score + h(next);
-
                     came_from.insert(next, current);
                     g_scores.insert(next, tentative_g_score);
-                    f_scores.insert(next, f_score);
 
-                    open_set2.push(HeapEdge(next, f_score));
+                    open_set2.push(HeapEdge(next, tentative_g_score));
                 }
             };
         }
