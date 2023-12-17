@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::Display;
-use std::hash::Hash;
-use std::iter::{once, successors};
+use std::hash::{Hash, Hasher};
+use std::iter::successors;
 use std::ops::{Add, Mul, Neg, Sub};
 use std::time::{Duration, Instant};
 
@@ -37,7 +37,11 @@ impl Part<usize> for Part2 {
 }
 
 fn solvify(input: &[String], min_step: usize, max_step: usize) -> usize {
+    let instant = Instant::now();
+
     let map = Map2::from(input, min_step, max_step);
+
+    // println!("{:?}", instant.elapsed());
 
     let option = map.edges.get(&v(0, 0));
 
@@ -53,13 +57,28 @@ struct Map {
     raw: Vec<Vec<char>>,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct Edge {
     from: Vec2,
     to: Vec2,
     direction: Vec2,
     normalized_direction: Vec2,
     cost: i32,
+}
+
+impl Hash for Edge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.from.hash(state);
+        self.to.hash(state);
+    }
+}
+
+impl Eq for Edge {}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        self.from.eq(&other.from) && self.to.eq(&other.to)
+    }
 }
 
 impl Edge {
@@ -145,88 +164,130 @@ impl Map2 {
         let start_edge_f_score = h(&start_edge);
 
         let mut open_set2 = BinaryHeap::<HeapEdge>::new();
-        open_set2.push(HeapEdge(start_edge, start_edge_f_score));
+        open_set2.push(HeapEdge(&start_edge, start_edge_f_score));
 
         let goal_edge = Edge::new(goal, goal, Vec2::default(), Vec2::default(), 0);
 
-        let mut came_from = HashMap::<Edge, Edge>::new();
+        let mut came_from = HashMap::<&Edge, &Edge>::new();
 
-        let mut closed_set = HashSet::<Edge>::new();
+        let mut closed_set = HashSet::<&Edge>::new();
 
-        let mut g_scores = HashMap::<Edge, i32>::new();
-        g_scores.insert(start_edge, 0);
+        let mut g_scores = HashMap::<&Edge, i32>::new();
+        g_scores.insert(&start_edge, 0);
 
-        let mut f_scores = HashMap::<Edge, i32>::new();
-        f_scores.insert(start_edge, start_edge_f_score);
+        let mut f_scores = HashMap::<&Edge, i32>::new();
+        f_scores.insert(&start_edge, start_edge_f_score);
 
-        let mut hash_set_search_duration = Duration::ZERO;
+        // let mut elapsed_a = Duration::ZERO;
+        // let mut elapsed_b = Duration::ZERO;
+        // let mut elapsed_c = Duration::ZERO;
+        // let mut elapsed_d = Duration::ZERO;
 
-        let search_start = Instant::now();
+        // let mut elapsed_d1 = Duration::ZERO;
+        // let mut elapsed_d2 = Duration::ZERO;
+        // let mut elapsed_d3 = Duration::ZERO;
+        // let mut elapsed_d4 = Duration::ZERO;
+        // let mut elapsed_d5 = Duration::ZERO;
+
+        let goal_edge_vec = vec![goal_edge];
 
         loop {
             let now = Instant::now();
 
             let current = open_set2.pop().unwrap().0;
 
-            if closed_set.contains(&current) {
+            if closed_set.contains(current) {
+                // elapsed_a += now.elapsed();
                 continue;
             }
+            // elapsed_a += now.elapsed();
+            let now = Instant::now();
 
             closed_set.insert(current);
 
-            hash_set_search_duration += now.elapsed();
+            if current == &goal_edge {
+                // elapsed_b += now.elapsed();
 
-            if current == goal_edge {
+                // dbg!(elapsed_a);
+                // dbg!(elapsed_b);
+                // dbg!(elapsed_c);
+                // dbg!(elapsed_d);
+                // dbg!(elapsed_d1);
+                // dbg!(elapsed_d2);
+                // dbg!(elapsed_d3);
+                // dbg!(elapsed_d4);
+                // dbg!(elapsed_d5);
                 return g_scores[&goal_edge];
             }
 
+            // elapsed_b += now.elapsed();
+            let now = Instant::now();
+
             let previous_direction = current.direction;
 
-            let vec: Box<dyn Iterator<Item=_>> =
+            let edges =
                 if current.to == goal {
-                    Box::new(once(&goal_edge))
+                    &goal_edge_vec
                 } else {
-                    Box::new(
-                        self.edges[&current.to].iter()
-                            .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default())
-                    )
-                };
+                    &self.edges[&current.to]
+                }.iter()
+                    .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default() || e == &goal_edge);
 
-            for &next in vec {
+            // elapsed_c += now.elapsed();
+            let now = Instant::now();
+
+            for next in edges {
+                let now = Instant::now();
                 let d_score = next.cost;
 
-                let tentative_g_score = g_scores[&current] + d_score;
+                let tentative_g_score = g_scores[current] + d_score;
+                // elapsed_d1 += now.elapsed();
 
-                if tentative_g_score < *g_scores.get(&next).unwrap_or(&i32::MAX) {
+                let now = Instant::now();
+                let x = g_scores.get(next).unwrap_or(&i32::MAX);
+                // elapsed_d2 += now.elapsed();
+
+                if tentative_g_score < *x {
+                    let now = Instant::now();
+                    let f_score = tentative_g_score + h(next);
+                    // elapsed_d3 += now.elapsed();
+
+                    let now = Instant::now();
+
                     came_from.insert(next, current);
                     g_scores.insert(next, tentative_g_score);
-                    let f_score = tentative_g_score + h(&next);
                     f_scores.insert(next, f_score);
 
+                    // elapsed_d4 += now.elapsed();
+                    let now = Instant::now();
+
                     open_set2.push(HeapEdge(next, f_score));
+
+                    // elapsed_d5 += now.elapsed();
                 }
             };
+            // elapsed_d += now.elapsed();
         }
     }
 }
 
-struct HeapEdge(Edge, i32);
+struct HeapEdge<'a>(&'a Edge, i32);
 
-impl Eq for HeapEdge {}
+impl<'a> Eq for HeapEdge<'a> {}
 
-impl PartialEq<Self> for HeapEdge {
+impl<'a> PartialEq<Self> for HeapEdge<'a> {
     fn eq(&self, other: &Self) -> bool {
         other.1.eq(&self.1)
     }
 }
 
-impl PartialOrd<Self> for HeapEdge {
+impl<'a> PartialOrd<Self> for HeapEdge<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         other.1.partial_cmp(&self.1)
     }
 }
 
-impl Ord for HeapEdge {
+impl<'a> Ord for HeapEdge<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         other.1.cmp(&self.1)
     }
