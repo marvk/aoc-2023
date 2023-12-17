@@ -4,7 +4,6 @@ use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::iter::successors;
 use std::ops::{Add, Mul, Neg, Sub};
-use std::time::{Duration, Instant};
 
 use crate::harness::{Day, Part};
 
@@ -37,16 +36,13 @@ impl Part<usize> for Part2 {
 }
 
 fn solvify(input: &[String], min_step: usize, max_step: usize) -> usize {
-    let instant = Instant::now();
-
     let map = Map2::from(input, min_step, max_step);
 
-    // println!("{:?}", instant.elapsed());
 
     let option = map.edges.get(&v(0, 0));
 
     let start = v(0, 0);
-    let goal = v_usize(map.width() - 1, map.height() - 1);
+    let goal = v_usize(map.width - 1, map.height - 1);
 
     let came_from = map.find_path(start, goal);
 
@@ -89,13 +85,12 @@ impl Edge {
 
 struct Map2 {
     edges: HashMap<Vec2, Vec<Edge>>,
-    raw: Vec<Vec<char>>,
+    width: usize,
+    height: usize,
 }
 
 impl Map2 {
     fn from(value: &[String], min_step: usize, max_step: usize) -> Self {
-        let map = Map::from(value);
-
         let vec =
             value.iter()
                 .filter(|l| !l.is_empty())
@@ -118,41 +113,26 @@ impl Map2 {
                             let from = current;
                             let to = current + d;
 
-                            let cost: u32 =
-                                successors(Some(to), |&e| Some(e - normalized))
-                                    .take_while(|&e| e != from)
-                                    .filter_map(|e| map.get(&e))
-                                    .sum();
 
-                            if cost == 0 || map.get(&to).is_none() {
+                            if to.x < 0 || to.y < 0 || to.x >= width as i32 || to.y >= height as i32 {
                                 None
                             } else {
+                                let cost: u32 =
+                                    successors(Some(to), |&e| Some(e - normalized))
+                                        .take_while(|&e| e != from)
+                                        .map(|e| vec[e.y as usize][e.x as usize])
+                                        .sum();
+
                                 Some(Edge::new(from, to, d, normalized, cost as i32))
                             }
                         })
-                        .collect::<Vec<_>>();
+                        .collect();
 
                 result.insert(current, edges);
             }
         }
 
-        Map2 { edges: result, raw: map.raw }
-    }
-
-
-    fn width(&self) -> usize {
-        self.raw[0].len()
-    }
-
-    fn height(&self) -> usize {
-        self.raw.len()
-    }
-
-    fn get(&self, position: &Vec2) -> Option<u32> {
-        self.raw
-            .get(position.y as usize)
-            .and_then(|vec| vec.get(position.x as usize))
-            .map(|e| e.to_digit(10).unwrap())
+        Map2 { edges: result, width, height }
     }
 
     fn find_path(&self, start: Vec2, goal: Vec2) -> i32 {
@@ -178,50 +158,20 @@ impl Map2 {
         let mut f_scores = HashMap::<&Edge, i32>::new();
         f_scores.insert(&start_edge, start_edge_f_score);
 
-        // let mut elapsed_a = Duration::ZERO;
-        // let mut elapsed_b = Duration::ZERO;
-        // let mut elapsed_c = Duration::ZERO;
-        // let mut elapsed_d = Duration::ZERO;
-
-        // let mut elapsed_d1 = Duration::ZERO;
-        // let mut elapsed_d2 = Duration::ZERO;
-        // let mut elapsed_d3 = Duration::ZERO;
-        // let mut elapsed_d4 = Duration::ZERO;
-        // let mut elapsed_d5 = Duration::ZERO;
-
         let goal_edge_vec = vec![goal_edge];
 
         loop {
-            let now = Instant::now();
-
             let current = open_set2.pop().unwrap().0;
 
             if closed_set.contains(current) {
-                // elapsed_a += now.elapsed();
                 continue;
             }
-            // elapsed_a += now.elapsed();
-            let now = Instant::now();
 
             closed_set.insert(current);
 
             if current == &goal_edge {
-                // elapsed_b += now.elapsed();
-
-                // dbg!(elapsed_a);
-                // dbg!(elapsed_b);
-                // dbg!(elapsed_c);
-                // dbg!(elapsed_d);
-                // dbg!(elapsed_d1);
-                // dbg!(elapsed_d2);
-                // dbg!(elapsed_d3);
-                // dbg!(elapsed_d4);
-                // dbg!(elapsed_d5);
                 return g_scores[&goal_edge];
             }
-
-            // elapsed_b += now.elapsed();
-            let now = Instant::now();
 
             let previous_direction = current.direction;
 
@@ -233,40 +183,23 @@ impl Map2 {
                 }.iter()
                     .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default() || e == &goal_edge);
 
-            // elapsed_c += now.elapsed();
-            let now = Instant::now();
-
             for next in edges {
-                let now = Instant::now();
                 let d_score = next.cost;
 
                 let tentative_g_score = g_scores[current] + d_score;
-                // elapsed_d1 += now.elapsed();
 
-                let now = Instant::now();
                 let x = g_scores.get(next).unwrap_or(&i32::MAX);
-                // elapsed_d2 += now.elapsed();
 
                 if tentative_g_score < *x {
-                    let now = Instant::now();
                     let f_score = tentative_g_score + h(next);
-                    // elapsed_d3 += now.elapsed();
-
-                    let now = Instant::now();
 
                     came_from.insert(next, current);
                     g_scores.insert(next, tentative_g_score);
                     f_scores.insert(next, f_score);
 
-                    // elapsed_d4 += now.elapsed();
-                    let now = Instant::now();
-
                     open_set2.push(HeapEdge(next, f_score));
-
-                    // elapsed_d5 += now.elapsed();
                 }
             };
-            // elapsed_d += now.elapsed();
         }
     }
 }
@@ -290,38 +223,6 @@ impl<'a> PartialOrd<Self> for HeapEdge<'a> {
 impl<'a> Ord for HeapEdge<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         other.1.cmp(&self.1)
-    }
-}
-
-impl Map {
-    fn new(raw: Vec<Vec<char>>) -> Self {
-        Self { raw }
-    }
-
-    fn width(&self) -> usize {
-        self.raw[0].len()
-    }
-
-    fn height(&self) -> usize {
-        self.raw.len()
-    }
-
-    fn get(&self, position: &Vec2) -> Option<u32> {
-        self.raw
-            .get(position.y as usize)
-            .and_then(|vec| vec.get(position.x as usize))
-            .map(|e| e.to_digit(10).unwrap())
-    }
-}
-
-impl From<&[String]> for Map {
-    fn from(value: &[String]) -> Self {
-        let vec = value.iter()
-            .filter(|l| !l.is_empty())
-            .map(|l| l.chars().collect())
-            .collect();
-
-        Map::new(vec)
     }
 }
 
