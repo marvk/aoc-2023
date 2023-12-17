@@ -1,13 +1,8 @@
-#![allow(dead_code, unused_imports, unreachable_code, unused_parens, unused_variables)]
-
 extern crate core;
 
-use std::any::Any;
-use std::cmp::max;
 use std::env;
-use std::fmt::Debug;
 use std::io::Error;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 use crate::day01::day01;
@@ -35,7 +30,6 @@ use crate::day17::day17;
 // use crate::day23::day23;
 // use crate::day24::day24;
 // use crate::day25::day25;
-use crate::harness::{AocResult, Day};
 
 mod harness;
 mod day01;

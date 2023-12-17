@@ -1,9 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use std::iter::successors;
-use std::ops::{Add, Mul, Neg, Sub};
+use std::ops::{Add, Mul, Sub};
 
 use crate::harness::{Day, Part};
 
@@ -44,9 +42,27 @@ fn solvify(input: &[String], min_step: usize, max_step: usize) -> u16 {
     map.find_path(start, goal) as u16
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+enum Axis {
+    None,
+    Vertical,
+    Horizontal,
+}
+
+impl From<&Vec2> for Axis {
+    fn from(value: &Vec2) -> Self {
+        match value {
+            Vec2 { x: 0, y: 0 } => Axis::None,
+            Vec2 { x: _, y: 0 } => Axis::Horizontal,
+            Vec2 { x: 0, y: _ } => Axis::Vertical,
+            _ => panic!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 struct Edge {
-    axis: Vec2,
+    axis: Axis,
     to: Vec2,
     cost: i16,
 }
@@ -67,7 +83,7 @@ impl PartialEq for Edge {
 }
 
 impl Edge {
-    fn new(axis: Vec2, to: Vec2, cost: i16) -> Self {
+    fn new(axis: Axis, to: Vec2, cost: i16) -> Self {
         Self { axis, to, cost }
     }
 }
@@ -79,17 +95,21 @@ struct Map {
 }
 
 impl Map {
+    pub fn new(edges: HashMap<Vec2, Vec<Edge>>, width: usize, height: usize) -> Self {
+        Self { edges, width, height }
+    }
+
     fn from(value: &[String], min_step: usize, max_step: usize) -> Self {
-        let vec =
+        let raw =
             value.iter()
                 .filter(|l| !l.is_empty())
                 .map(|l| l.chars().map(|c| c.to_digit(10).unwrap()).collect::<Vec<_>>())
                 .collect::<Vec<_>>();
 
-        let width = vec[0].len();
-        let height = vec.len();
+        let width = raw[0].len();
+        let height = raw.len();
 
-        let mut result = HashMap::new();
+        let mut edge_map = HashMap::new();
 
         for y in 0..height {
             for x in 0..width {
@@ -97,57 +117,57 @@ impl Map {
 
                 let edges =
                     Vec2::DIRECTIONS.iter()
-                        .flat_map(|e| (min_step..=max_step).map(|step| (*e, *e * step as i16)))
-                        .filter_map(|(normalized_direction, direction)| {
-                            let from = current;
-                            let to = current + direction;
+                        .flat_map(|e| (min_step as i16..=max_step as i16).map(|step| (*e, step)))
+                        .filter_map(|(direction, steps)| {
+                            let to = current + direction * steps;
 
                             if to.x < 0 || to.y < 0 || to.x >= width as i16 || to.y >= height as i16 {
                                 None
                             } else {
                                 let cost =
-                                    successors(Some(to), |&e| Some(e - normalized_direction))
-                                        .take_while(|&e| e != from)
-                                        .map(|e| vec[e.y as usize][e.x as usize] as i16)
+                                    (1..=steps)
+                                        .map(|step|
+                                            raw[(current.y + direction.y * step) as usize][(current.x + direction.x * step) as usize] as i16
+                                        )
                                         .sum();
 
-                                Some(Edge::new(normalized_direction.abs(), to, cost))
+                                Some(Edge::new(Axis::from(&direction), to, cost))
                             }
                         })
                         .collect();
 
-                result.insert(current, edges);
+                edge_map.insert(current, edges);
             }
         }
 
-        Map { edges: result, width, height }
+        Map::new(edge_map, width, height)
     }
 
     fn find_path(&self, start: Vec2, goal: Vec2) -> i16 {
-        let start_edge = Edge::new(Vec2::default(), start, 0);
-        let goal_edge = Edge::new(Vec2::default(), goal, 0);
-        let goal_edge_vec = vec![goal_edge.clone()];
+        let start_edge = Edge::new(Axis::None, start, 0);
+        let goal_edge = Edge::new(Axis::None, goal, 0);
+        let goal_edge_vec = vec![goal_edge];
 
-        let mut open_set = BinaryHeap::<HeapEdge>::new();
-        open_set.push(HeapEdge(&start_edge, 0));
+        let mut open = BinaryHeap::<HeapEdge>::new();
+        open.push(HeapEdge(start_edge, 0));
 
-        let mut closed_set = HashSet::<&Edge>::new();
+        let mut closed = HashSet::<Edge>::new();
 
-        let mut g_scores = HashMap::<&Edge, i16>::new();
-        g_scores.insert(&start_edge, 0);
+        let mut scores = HashMap::<Edge, i16>::new();
+        scores.insert(start_edge, 0);
 
         loop {
-            let current = open_set.pop().unwrap().0;
+            let current = open.pop().unwrap().0;
 
-            if closed_set.contains(current) {
+            if closed.contains(&current) {
                 continue;
             }
 
-            closed_set.insert(current);
-
-            if current == &goal_edge {
-                return g_scores[&goal_edge];
+            if current == goal_edge {
+                return scores[&goal_edge];
             }
+
+            closed.insert(current);
 
             let previous_axis = current.axis;
 
@@ -156,42 +176,42 @@ impl Map {
                     &goal_edge_vec
                 } else {
                     &self.edges[&current.to]
-                }.iter().filter(|&e| e.axis != previous_axis || previous_axis == Vec2::default());
+                }.iter().filter(|&e| e.axis != previous_axis || previous_axis == Axis::None);
 
             for next in edges {
                 let d_score = next.cost;
 
-                let tentative_g_score = g_scores[current] + d_score;
+                let tentative_g_score = scores[&current] + d_score;
 
-                let x = g_scores.get(next).unwrap_or(&i16::MAX);
+                let x = scores.get(next).unwrap_or(&i16::MAX);
 
                 if tentative_g_score < *x {
-                    g_scores.insert(next, tentative_g_score);
+                    scores.insert(*next, tentative_g_score);
 
-                    open_set.push(HeapEdge(next, tentative_g_score));
+                    open.push(HeapEdge(*next, tentative_g_score));
                 }
-            };
+            }
         }
     }
 }
 
-struct HeapEdge<'a>(&'a Edge, i16);
+struct HeapEdge(Edge, i16);
 
-impl<'a> Eq for HeapEdge<'a> {}
+impl Eq for HeapEdge {}
 
-impl<'a> PartialEq<Self> for HeapEdge<'a> {
+impl PartialEq<Self> for HeapEdge {
     fn eq(&self, other: &Self) -> bool {
         other.1.eq(&self.1)
     }
 }
 
-impl<'a> PartialOrd<Self> for HeapEdge<'a> {
+impl PartialOrd<Self> for HeapEdge {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         other.1.partial_cmp(&self.1)
     }
 }
 
-impl<'a> Ord for HeapEdge<'a> {
+impl Ord for HeapEdge {
     fn cmp(&self, other: &Self) -> Ordering {
         other.1.cmp(&self.1)
     }
@@ -222,18 +242,6 @@ impl Vec2 {
     const fn new(x: i16, y: i16) -> Self {
         Self { x, y }
     }
-
-    const fn len(&self) -> i16 {
-        self.x.abs() + self.y.abs()
-    }
-
-    const fn abs(&self) -> Vec2 {
-        v(self.x.abs(), self.y.abs())
-    }
-
-    const fn manhattan_dist(&self, other: &Vec2) -> i16 {
-        (self.x - other.x).abs() + (self.y - other.y).abs()
-    }
 }
 
 impl Add<Vec2> for Vec2 {
@@ -249,14 +257,6 @@ impl Sub<Vec2> for Vec2 {
 
     fn sub(self, rhs: Vec2) -> Self::Output {
         v(self.x - rhs.x, self.y - rhs.y)
-    }
-}
-
-impl Neg for Vec2 {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        v(-self.x, -self.y)
     }
 }
 
