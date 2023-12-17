@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
-use std::iter::successors;
+use std::iter::{once, successors};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::time::{Duration, Instant};
 
 use crate::harness::{Day, Part};
 
@@ -52,28 +53,6 @@ struct Map {
     raw: Vec<Vec<char>>,
 }
 
-struct Node(Vec2, i32);
-
-impl Eq for Node {}
-
-impl PartialEq<Self> for Node {
-    fn eq(&self, other: &Self) -> bool {
-        other.1.eq(&self.1)
-    }
-}
-
-impl PartialOrd<Self> for Node {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.1.partial_cmp(&self.1)
-    }
-}
-
-impl Ord for Node {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.1.cmp(&self.1)
-    }
-}
-
 #[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
 struct Edge {
     from: Vec2,
@@ -93,7 +72,6 @@ struct Map2 {
     edges: HashMap<Vec2, Vec<Edge>>,
     raw: Vec<Vec<char>>,
 }
-
 
 impl Map2 {
     fn from(value: &[String], min_step: usize, max_step: usize) -> Self {
@@ -160,123 +138,97 @@ impl Map2 {
 
     fn find_path(&self, start: Vec2, goal: Vec2) -> i32 {
         let h = |e: &Edge| {
-            if e.direction.len() != 0 {
-                e.to.manhattan_dist(&goal) + e.cost / e.direction.len()
-            } else {
-                e.to.manhattan_dist(&goal)
-            }
+            e.to.manhattan_dist(&goal)
         };
+
+        let start_edge = Edge::new(start, start, Vec2::default(), Vec2::default(), 0);
+        let start_edge_f_score = h(&start_edge);
+
+        let mut open_set2 = BinaryHeap::<HeapEdge>::new();
+        open_set2.push(HeapEdge(start_edge, start_edge_f_score));
 
         let goal_edge = Edge::new(goal, goal, Vec2::default(), Vec2::default(), 0);
 
         let mut came_from = HashMap::<Edge, Edge>::new();
 
-        let mut open_set = HashSet::<Edge>::new();
-        let start_edge = Edge::new(start, start, Vec2::default(), Vec2::default(), 0);
-        open_set.insert(start_edge);
+        let mut closed_set = HashSet::<Edge>::new();
 
-        let mut g_score = HashMap::<Edge, i32>::new();
-        g_score.insert(start_edge, 0);
+        let mut g_scores = HashMap::<Edge, i32>::new();
+        g_scores.insert(start_edge, 0);
 
-        let mut f_score = HashMap::<Edge, i32>::new();
-        f_score.insert(start_edge, h(&start_edge));
+        let mut f_scores = HashMap::<Edge, i32>::new();
+        f_scores.insert(start_edge, start_edge_f_score);
 
-        let mut iterations = 1;
+        let mut hash_set_search_duration = Duration::ZERO;
 
-        let mut max = v(0, 0);
+        let search_start = Instant::now();
 
         loop {
-            let current = open_set.iter().min_by_key(|&e| f_score[e]).copied();
+            let now = Instant::now();
 
+            let current = open_set2.pop().unwrap().0;
 
-            if current.is_none() {
-                panic!();
+            if closed_set.contains(&current) {
+                continue;
             }
 
-            let current = current.unwrap();
-            open_set.remove(&current);
+            closed_set.insert(current);
 
-            if current.to.len() > max.len() {
-                max = current.to;
-                println!("{:?}", max);
-            }
+            hash_set_search_duration += now.elapsed();
 
             if current == goal_edge {
-                let option = g_score.iter().find(|e| e.0 == &goal_edge);
-
-                dbg!(option.unwrap().1);
-
-                // for x in &g_score {
-                //     println!("{:?}", x);
-                // }
-
-                println!("{}", "~".repeat(100));
-                println!("{}", "~".repeat(100));
-                println!("{}", "~".repeat(100));
-
-                return *option.unwrap().1;
+                return g_scores[&goal_edge];
             }
 
             let previous_direction = current.direction;
 
-            let vec = &self.edges[&current.to];
-            if (current.to == goal) {
-                let next = goal_edge;
+            let vec: Box<dyn Iterator<Item=_>> =
+                if current.to == goal {
+                    Box::new(once(&goal_edge))
+                } else {
+                    Box::new(
+                        self.edges[&current.to].iter()
+                            .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default())
+                    )
+                };
 
+            for &next in vec {
                 let d_score = next.cost;
 
-                let tentative_g_score = g_score[&current] + d_score;
+                let tentative_g_score = g_scores[&current] + d_score;
 
-                if tentative_g_score < *g_score.get(&next).unwrap_or(&i32::MAX) {
+                if tentative_g_score < *g_scores.get(&next).unwrap_or(&i32::MAX) {
                     came_from.insert(next, current);
-                    g_score.insert(next, tentative_g_score);
-                    f_score.insert(next, tentative_g_score + h(&next));
+                    g_scores.insert(next, tentative_g_score);
+                    let f_score = tentative_g_score + h(&next);
+                    f_scores.insert(next, f_score);
 
-                    open_set.insert(next);
+                    open_set2.push(HeapEdge(next, f_score));
                 }
-            } else {
-                for &next in vec.iter()
-                    .filter(|&e| (e.direction.x != previous_direction.x && e.direction.y != previous_direction.y) || previous_direction == Vec2::default()) {
-                    let d_score = next.cost;
-
-                    let tentative_g_score = g_score[&current] + d_score;
-
-                    if tentative_g_score < *g_score.get(&next).unwrap_or(&i32::MAX) {
-                        came_from.insert(next, current);
-                        g_score.insert(next, tentative_g_score);
-                        f_score.insert(next, tentative_g_score + h(&next));
-
-                        open_set.insert(next);
-                    }
-                };
-            }
-
-
-            // println!("came_from");
-            // for x in &came_from {
-            //     println!("{:?}", x);
-            // }
-            // println!("open_set");
-            // for x in &open_set {
-            //     println!("{:?}", x);
-            // }
-            // println!("g_score");
-            // for x in &g_score {
-            //     println!("{:?}", x);
-            // }
-            // println!("f_score");
-            // let mut vec1 = f_score.iter().collect::<Vec<_>>();
-            // vec1.sort_by_key(|e| e.1);
-            // for x in &vec1 {
-            //     println!("{:?}", x);
-            // }
-
-            // if iterations == 2 {
-            //     panic!();
-            // }
-            //
-            // iterations += 1;
+            };
         }
+    }
+}
+
+struct HeapEdge(Edge, i32);
+
+impl Eq for HeapEdge {}
+
+impl PartialEq<Self> for HeapEdge {
+    fn eq(&self, other: &Self) -> bool {
+        other.1.eq(&self.1)
+    }
+}
+
+impl PartialOrd<Self> for HeapEdge {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        other.1.partial_cmp(&self.1)
+    }
+}
+
+impl Ord for HeapEdge {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.1.cmp(&self.1)
     }
 }
 
@@ -298,77 +250,6 @@ impl Map {
             .get(position.y as usize)
             .and_then(|vec| vec.get(position.x as usize))
             .map(|e| e.to_digit(10).unwrap())
-    }
-
-    fn find_path(&self, start: Vec2, goal: Vec2) -> HashMap<Vec2, Vec2> {
-        let h = |v: &Vec2| 100000;// v.manhattan_dist(&goal);
-        let d = |v: &Vec2| self.get(v);
-
-        let mut came_from = HashMap::<Vec2, Vec2>::new();
-
-        // let mut open_set = BinaryHeap::<Node>::new();
-        // open_set.push(Node(start, h(&start)));
-
-        let mut open_set = HashSet::<Vec2>::new();
-        open_set.insert(start);
-
-        let mut g_score = HashMap::<Vec2, i32>::new();
-        g_score.insert(start, self.get(&start).unwrap() as i32);
-
-        let mut f_score = HashMap::<Vec2, i32>::new();
-        f_score.insert(start, h(&start));
-
-        loop {
-            let current = open_set.iter().min_by_key(|&e| f_score[e]).copied();
-
-            if current.is_none() {
-                break;
-            }
-
-
-            let current = current.unwrap();
-            open_set.remove(&current);
-
-            if current == goal {
-                return came_from;
-            }
-
-            let can_go_straight = false;
-            let current_pos = current;
-            let previous_pos_1 = came_from.get(&current_pos);
-            let previous_pos_2 = previous_pos_1.and_then(|e| came_from.get(e));
-            let previous_pos_3 = previous_pos_2.and_then(|e| came_from.get(e));
-
-            let previous_direction_1 = previous_pos_1.map(|&e1| current_pos - e1).unwrap_or_default();
-            let previous_direction_2 = previous_pos_1.and_then(|&e1| previous_pos_2.map(|&e2| e1 - e2)).unwrap_or_default();
-            let previous_direction_3 = previous_pos_2.and_then(|&e2| previous_pos_3.map(|&e3| e2 - e3)).unwrap_or_default();
-
-            let mut x = Vec2::DIRECTIONS.to_vec();
-            x.retain(|&e| e != -previous_direction_1);
-
-            if previous_direction_1 == previous_direction_2 && previous_direction_2 == previous_direction_3 && previous_direction_1 != Vec2::default() {
-                x.retain(|&e| e != previous_direction_1);
-            }
-
-            for direction in x {
-                let neighbour = current_pos + direction;
-
-                if let Some(d_score) = d(&neighbour) {
-                    let tentative_g_score = g_score[&current_pos] + d_score as i32;
-
-                    if tentative_g_score < *g_score.get(&neighbour).unwrap_or(&i32::MAX) {
-                        came_from.insert(neighbour, current_pos);
-                        g_score.insert(neighbour, tentative_g_score);
-                        f_score.insert(neighbour, tentative_g_score + h(&neighbour));
-
-                        open_set.insert(neighbour);
-                    }
-                }
-            };
-        }
-
-
-        todo!()
     }
 }
 
