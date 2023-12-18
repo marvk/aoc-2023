@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, AddAssign, Mul, Sub};
 use std::str::FromStr;
 
 use crate::harness::{Day, Part};
@@ -31,21 +31,18 @@ impl Part<u64> for Part2 {
     }
 }
 
-fn solve(instructions: &[Instruction]) -> u64 {
+fn solve(instructions: &[Vec2]) -> u64 {
     let polygon = build_polygon(instructions);
     calculate_area(&polygon)
 }
 
-fn build_polygon(instructions: &[Instruction]) -> Vec<Vec2> {
-    let mut result = vec![];
-
-    let mut current = v(0, 0);
-    for instruction in instructions {
-        current = current + (instruction.direction * instruction.length as i64);
-        result.push(current);
-    }
-
-    result
+fn build_polygon(instructions: &[Vec2]) -> Vec<Vec2> {
+    instructions.iter()
+        .scan(v(0, 0), |current, &instruction| {
+            *current += instruction;
+            Some(*current)
+        })
+        .collect::<Vec<_>>()
 }
 
 fn calculate_area(polygon: &[Vec2]) -> u64 {
@@ -59,18 +56,18 @@ fn calculate_area(polygon: &[Vec2]) -> u64 {
     }).sum::<i64>().unsigned_abs() / 2 + 1
 }
 
-fn parse(input: &[String]) -> (Vec<Instruction>, Vec<Instruction>) {
+fn parse(input: &[String]) -> (Vec<Vec2>, Vec<Vec2>) {
     input.iter()
         .filter(|l| !l.is_empty())
         .map(|l| parse_line(l))
         .unzip()
 }
 
-fn parse_line(line: &str) -> (Instruction, Instruction) {
+fn parse_line(line: &str) -> (Vec2, Vec2) {
     let mut split = line.split(' ');
 
     let direction = Vec2::from_str(split.next().unwrap()).unwrap();
-    let distance = split.next().unwrap().parse::<usize>().unwrap();
+    let distance = split.next().unwrap().parse::<i64>().unwrap();
 
     let color =
         split.next().unwrap()[2..8].chars()
@@ -80,31 +77,13 @@ fn parse_line(line: &str) -> (Instruction, Instruction) {
             .map(|(idx, e)| 16_usize.pow(idx as u32) * e as usize)
             .sum::<usize>();
 
-    let distance2 = color >> 4;
+    let distance2 = (color >> 4) as i64;
     let direction2 = Vec2::DIRECTIONS[color % 16];
 
     (
-        Instruction::new(
-            direction,
-            distance,
-        ),
-        Instruction::new(
-            direction2,
-            distance2,
-        ),
+        direction * distance,
+        direction2 * distance2,
     )
-}
-
-#[derive(Debug)]
-struct Instruction {
-    direction: Vec2,
-    length: usize,
-}
-
-impl Instruction {
-    pub fn new(direction: Vec2, length: usize) -> Self {
-        Self { direction, length }
-    }
 }
 
 const fn v(x: i64, y: i64) -> Vec2 {
@@ -169,5 +148,12 @@ impl Mul<i64> for Vec2 {
 
     fn mul(self, rhs: i64) -> Self::Output {
         v(self.x * rhs, self.y * rhs)
+    }
+}
+
+impl AddAssign for Vec2 {
+    fn add_assign(&mut self, rhs: Self) {
+        self.x += rhs.x;
+        self.y += rhs.y;
     }
 }
