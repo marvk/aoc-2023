@@ -15,7 +15,7 @@ impl Part<u64> for Part1 {
     }
 
     fn solve(&self, input: &[String]) -> u64 {
-        solve(parse(input).0)
+        solve(&parse(input).0)
     }
 }
 
@@ -27,16 +27,16 @@ impl Part<u64> for Part2 {
     }
 
     fn solve(&self, input: &[String]) -> u64 {
-        solve(parse(input).1)
+        solve(&parse(input).1)
     }
 }
 
-fn solve(instructions: Vec<Instruction>) -> u64 {
+fn solve(instructions: &[Instruction]) -> u64 {
     let polygon = build_polygon(instructions);
     calculate_area(&polygon)
 }
 
-fn build_polygon(instructions: Vec<Instruction>) -> Vec<Vec2> {
+fn build_polygon(instructions: &[Instruction]) -> Vec<Vec2> {
     let mut result = vec![];
 
     let mut current = v(0, 0);
@@ -49,11 +49,14 @@ fn build_polygon(instructions: Vec<Instruction>) -> Vec<Vec2> {
 }
 
 fn calculate_area(polygon: &[Vec2]) -> u64 {
-    (0..polygon.len()).map(|i|
-        polygon[i].x * polygon[(i + 1) % polygon.len()].y
-            - polygon[i].y * polygon[(i + 1) % polygon.len()].x
-            + (polygon[i] - polygon[(i + 1) % polygon.len()]).abs()
-    ).sum::<i64>().unsigned_abs() / 2 + 1
+    (0..polygon.len()).map(|i| {
+        let p1 = polygon[i];
+        let p2 = polygon[(i + 1) % polygon.len()];
+
+        p1.x * p2.y -
+            p1.y * p2.x +
+            (p1 - p2).abs()
+    }).sum::<i64>().unsigned_abs() / 2 + 1
 }
 
 fn parse(input: &[String]) -> (Vec<Instruction>, Vec<Instruction>) {
