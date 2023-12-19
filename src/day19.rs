@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::harness::{Day, Part};
@@ -42,7 +42,7 @@ impl Part<u64> for Part2 {
     fn solve(&self, input: &[String]) -> u64 {
         solve_part_2(&parse(input).0)
             .iter()
-            .map(RecRanges::combinations)
+            .map(RecRanges::count_combinations)
             .sum()
     }
 }
@@ -53,14 +53,6 @@ fn solve_part_2(map: &HashMap<String, Workflow>) -> Vec<RecRanges> {
 
 #[derive(Clone)]
 struct MyRange([bool; 4000]);
-
-impl Debug for MyRange {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let x: String = self.0.map(|e| if e { '1' } else { '0' }).iter().collect();
-
-        write!(f, "{}", x)
-    }
-}
 
 impl MyRange {
     pub fn new(min: u32, max_inclusive: u32) -> Self {
@@ -78,14 +70,14 @@ impl MyRange {
     }
 
     fn except(&mut self, rhs: &Self) {
-        for i in 0..4000 {
-            self.0[i] = self.0[i] && !rhs.0[i];
+        for (lhs, rhs) in self.0.iter_mut().zip(&rhs.0) {
+            *lhs = *lhs && !rhs
         }
     }
 
     fn intersect(&mut self, rhs: &Self) {
-        for i in 0..4000 {
-            self.0[i] = self.0[i] && rhs.0[i];
+        for (lhs, &rhs) in self.0.iter_mut().zip(&rhs.0) {
+            *lhs = *lhs && rhs
         }
     }
 }
@@ -105,7 +97,7 @@ impl Default for MyRange {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct RecRanges {
     x: MyRange,
     m: MyRange,
@@ -114,7 +106,7 @@ struct RecRanges {
 }
 
 impl RecRanges {
-    fn combinations(&self) -> u64 {
+    fn count_combinations(&self) -> u64 {
         self.x.count() * self.m.count() * self.a.count() * self.s.count()
     }
 
@@ -141,8 +133,10 @@ fn solve_part_2_rec(workflows: &HashMap<String, Workflow>, next: &Next, mut stat
             for rule in &workflow.rules {
                 let mut next_state = state.clone();
 
-                next_state.get_range_mut(rule).intersect(&rule.into());
-                state.get_range_mut(rule).except(&rule.into());
+                let rule_range = rule.into();
+
+                next_state.get_range_mut(rule).intersect(&rule_range);
+                state.get_range_mut(rule).except(&rule_range);
 
                 result.append(&mut solve_part_2_rec(workflows, &rule.next, next_state));
             }
@@ -156,12 +150,17 @@ fn solve_part_2_rec(workflows: &HashMap<String, Workflow>, next: &Next, mut stat
 
 fn parse(input: &[String]) -> (HashMap<String, Workflow>, Vec<MachinePart>) {
     let mut split = input.split(|e| e.is_empty());
+
     let workflows =
         split.next().unwrap().iter()
             .map(|e| Workflow::from_str(e).unwrap())
             .map(|e| (e.name.clone(), e))
             .collect::<HashMap<_, _>>();
-    let machine_parts = split.next().unwrap().iter().map(|e| MachinePart::from_str(e).unwrap()).collect::<Vec<_>>();
+
+    let machine_parts =
+        split.next().unwrap().iter()
+            .map(|e| MachinePart::from_str(e).unwrap())
+            .collect::<Vec<_>>();
 
     (workflows, machine_parts)
 }
@@ -234,21 +233,23 @@ impl FromStr for Workflow {
         let name = split.next().unwrap();
 
         let remainder = split.next().unwrap();
-        let remainder = &remainder[0..(remainder.len() - 1)];
-
-        let split1 = remainder.split(',').collect::<Vec<_>>();
+        let remainder =
+            remainder[0..(remainder.len() - 1)]
+                .split(',')
+                .collect::<Vec<_>>();
 
         let rules =
-            split1.iter()
+            remainder.iter()
                 .rev()
                 .skip(1)
                 .rev()
                 .map(|e| Rule::from_str(e).unwrap())
                 .collect::<Vec<_>>();
 
-        let result = split1.last().unwrap();
-
-        let accept = result.parse().unwrap();
+        let accept =
+            remainder
+                .last().unwrap()
+                .parse().unwrap();
 
         Ok(Self::new(name.to_string(), rules, accept))
     }
@@ -289,11 +290,10 @@ impl FromStr for Rule {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut chars = s.chars();
         let variable = chars.next().unwrap();
-        let condition: Operator = chars.next().unwrap().try_into().unwrap();
+        let condition = chars.next().unwrap().try_into().unwrap();
 
         let mut split = s[2..].split(':');
-
-        let value = split.next().unwrap().parse::<u32>().unwrap();
+        let value = split.next().unwrap().parse().unwrap();
         let next_workflow = split.next().unwrap().parse().unwrap();
 
         Ok(Self::new(variable, condition, value, next_workflow))
@@ -322,7 +322,7 @@ impl FromStr for MachinePart {
             s[1..(s.len() - 1)]
                 .split(',')
                 .map(|e| &e[2..])
-                .map(|e| e.parse::<u32>().unwrap())
+                .map(|e| e.parse().unwrap())
                 .collect::<Vec<_>>();
 
         Ok(Self::new(vec[0], vec[1], vec[2], vec[3]))
