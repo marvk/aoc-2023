@@ -51,6 +51,33 @@ fn solve_part_2(map: &HashMap<String, Workflow>) -> Vec<RecRanges> {
     solve_part_2_rec(map, &Next::Workflow("in".to_string()), RecRanges::default())
 }
 
+fn solve_part_2_rec(workflows: &HashMap<String, Workflow>, next: &Next, mut state: RecRanges) -> Vec<RecRanges> {
+    match next {
+        Next::Accept => vec![state],
+        Next::Reject => vec![],
+        Next::Workflow(name) => {
+            let mut result = vec![];
+
+            let workflow = &workflows[name];
+
+            for rule in &workflow.rules {
+                let mut next_state = state.clone();
+
+                let rule_range = rule.into();
+
+                next_state.get_range_mut(rule).intersect(&rule_range);
+                state.get_range_mut(rule).except(&rule_range);
+
+                result.append(&mut solve_part_2_rec(workflows, &rule.next, next_state));
+            }
+
+            result.append(&mut solve_part_2_rec(workflows, &workflow.on_all_false, state));
+
+            result
+        }
+    }
+}
+
 #[derive(Clone)]
 struct MyRange([bool; 4000]);
 
@@ -121,33 +148,6 @@ impl RecRanges {
     }
 }
 
-fn solve_part_2_rec(workflows: &HashMap<String, Workflow>, next: &Next, mut state: RecRanges) -> Vec<RecRanges> {
-    match next {
-        Next::Accept => vec![state],
-        Next::Reject => vec![],
-        Next::Workflow(name) => {
-            let mut result = vec![];
-
-            let workflow = &workflows[name];
-
-            for rule in &workflow.rules {
-                let mut next_state = state.clone();
-
-                let rule_range = rule.into();
-
-                next_state.get_range_mut(rule).intersect(&rule_range);
-                state.get_range_mut(rule).except(&rule_range);
-
-                result.append(&mut solve_part_2_rec(workflows, &rule.next, next_state));
-            }
-
-            result.append(&mut solve_part_2_rec(workflows, &workflow.on_all_false, state));
-
-            result
-        }
-    }
-}
-
 fn parse(input: &[String]) -> (HashMap<String, Workflow>, Vec<MachinePart>) {
     let mut split = input.split(|e| e.is_empty());
 
@@ -190,14 +190,12 @@ enum Operator {
     LessThan,
 }
 
-impl TryFrom<char> for Operator {
-    type Error = ();
-
-    fn try_from(value: char) -> Result<Self, Self::Error> {
+impl From<char> for Operator {
+    fn from(value: char) -> Self {
         match value {
-            '<' => Ok(Self::LessThan),
-            '>' => Ok(Self::GreaterThan),
-            _ => Err(()),
+            '<' => Self::LessThan,
+            '>' => Self::GreaterThan,
+            _ => panic!(),
         }
     }
 }
@@ -290,7 +288,7 @@ impl FromStr for Rule {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut chars = s.chars();
         let variable = chars.next().unwrap();
-        let condition = chars.next().unwrap().try_into().unwrap();
+        let condition = chars.next().unwrap().into();
 
         let mut split = s[2..].split(':');
         let value = split.next().unwrap().parse().unwrap();
