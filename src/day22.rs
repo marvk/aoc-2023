@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 use std::collections::HashSet;
-use std::ops::{Add, AddAssign, Mul, Sub};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -30,7 +29,6 @@ impl Part<u32> for Part1 {
             .count() as u32
     }
 }
-
 
 struct Part2;
 
@@ -70,15 +68,15 @@ fn _drop_bricks(vec: &mut Vec<Cuboid>, short_circuit: bool) -> usize {
         for i in 0..vec.len() {
             if vec[i].min.z > 1 {
                 loop {
-                    let any_blocking = vec.iter()
-                        .enumerate()
-                        .filter(|(j, _)| *j != i)
-                        .map(|(_, other)| other)
-                        .filter(|other| other.max.z == vec[i].min.z - 1)
-                        .any(|other| vec[i].vertical_projection_overlaps(other));
+                    let any_blocking =
+                        vec.iter()
+                            .filter(|other| other.max.z == vec[i].min.z - 1)
+                            .filter(|other| other.id != vec[i].id)
+                            .any(|other| vec[i].vertical_projection_overlaps(other));
 
                     if !any_blocking {
                         any_dropped = true;
+
                         bricks_that_fell.insert(vec[i].id);
                         vec[i].max.z -= 1;
                         vec[i].min.z -= 1;
@@ -107,10 +105,11 @@ fn _drop_bricks(vec: &mut Vec<Cuboid>, short_circuit: bool) -> usize {
 
 
 fn parse(input: &[String]) -> Vec<Cuboid> {
-    let mut result = input.iter()
-        .filter(|e| !e.is_empty())
-        .map(|e| Cuboid::from_str(e).unwrap())
-        .collect::<Vec<_>>();
+    let mut result =
+        input.iter()
+            .filter(|e| !e.is_empty())
+            .map(|e| Cuboid::from_str(e).unwrap())
+            .collect::<Vec<_>>();
 
     result.sort_by_key(|e| e.max.z);
 
