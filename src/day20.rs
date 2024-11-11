@@ -1,6 +1,5 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
-use std::fs::write;
 
 use crate::harness::{Day, Part};
 
@@ -58,37 +57,20 @@ impl Part<u64> for Part2 {
     fn solve(&self, input: &[String]) -> u64 {
         let mut modules = parse(input);
 
+        // Skip test if tx module doesn't exist
         if !modules.values().any(|e| e.connections.contains(&"tx".to_string())) {
-            return 0;
+            return self.expect_test();
         }
 
-        let mut tgf = String::new();
+        let map = Self::find_first_low_pulses_for_ls_modules(&mut modules);
+        
+        lcm(&map.values().copied().collect::<Vec<_>>())
+    }
+}
 
-        for x in modules.keys() {
-            tgf.push_str(x);
-            tgf.push(' ');
-            tgf.push_str(x);
-            tgf.push('\n');
-        }
-
-        tgf.push_str("#\n");
-
-        for module in modules.values() {
-            for connection in &module.connections {
-                tgf.push_str(&module.name);
-                tgf.push(' ');
-                tgf.push_str(connection);
-                tgf.push('\n');
-            }
-        }
-
-        write("graph.tgf", tgf).unwrap();
-
-        todo!();
-
-
-        let mut low_count = 0;
-        let mut high_count = 0;
+impl Part2 {
+    fn find_first_low_pulses_for_ls_modules(modules: &mut HashMap<String, Module>) -> HashMap<String, u64> {
+        let mut first: HashMap<String, u64> = HashMap::new();
 
         let mut n = 0;
 
@@ -99,16 +81,10 @@ impl Part<u64> for Part2 {
             open_list.push_back(("button".to_string(), "broadcaster".to_string(), Pulse::Low));
 
             while let Some((from, to, pulse)) = open_list.pop_front() {
-                match pulse {
-                    Pulse::High => high_count += 1,
-                    Pulse::Low => low_count += 1,
-                }
-
-                if to == "rx" {
-                    println!("{} {:?}", n, pulse);
-
-                    if matches!(pulse, Pulse::Low) {
-                        return n;
+                if (to == "ls" && matches!(pulse, Pulse::High)) {
+                    first.entry(from.clone()).or_insert(n);
+                    if (first.len() == 4) {
+                        return first;
                     }
                 }
 
@@ -122,6 +98,20 @@ impl Part<u64> for Part2 {
             }
         }
     }
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        return a;
+    }
+    gcd(b, a % b)
+}
+
+fn lcm(nums: &[u64]) -> u64 {
+    nums.iter()
+        .copied()
+        .reduce(|acc, e| (e * acc) / gcd(e, acc))
+        .unwrap()
 }
 
 fn parse(input: &[String]) -> HashMap<String, Module> {
